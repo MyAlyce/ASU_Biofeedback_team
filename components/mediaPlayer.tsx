@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { subscribeHEGPlayback, unsubscribeHEGPlayback } from '../scripts/connect';
-import '../scripts/media/videocontrols.css';
+import '../styles/videocontrols.css';
 import { SoundCloudPlayer } from './players/soundcloud';
 
 const MediaPlayer = ({ id }: { id: string }) => {
@@ -33,18 +33,13 @@ const MediaPlayer = ({ id }: { id: string }) => {
 
   return (
     <div className={`media-player ${collapsed ? 'collapsed' : ''}`}>
-      {/* Collapse Button */}
       <button className="collapse-btn" onClick={toggleCollapse}>
-        {collapsed ? '⏵Expand' : '⏷Minimize'}
+        {collapsed ? '↓ Show Player' : '↑ Hide Player'}
       </button>
 
-      {/* Content inside the collapsible container */}
       <div className={`content ${collapsed ? 'hidden' : ''}`}>
-        {/* SoundCloud Player */}
-        <h2>Connect to SoundCloud</h2>
+        <h2>SoundCloud Player</h2>
         <SoundCloudPlayer autoPlay={true} color="blue" />
-
-        
       </div>
     </div>
   );
