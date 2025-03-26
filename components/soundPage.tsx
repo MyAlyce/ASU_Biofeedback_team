@@ -9,7 +9,7 @@ const SoundPage = () => {
     <div>
         <MediaPlayer id="media1" />
     </div>
-<ShaderPlayer/>
+    <ShaderPlayer/>
 </div>);
 };
 

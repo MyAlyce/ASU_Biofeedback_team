@@ -1,0 +1,92 @@
+.collapse-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: transparent;
+    color: #666;
+    border: none;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #ddd;
+  }
+
+
+.media-player {
+    background: linear-gradient(145deg, #ffffff, #f0f0f0);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 20px;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+  
+
+  .collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+  }
+  
+  /* Content Collapse Effect */
+  .content {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 800px;
+    opacity: 1;
+    padding-top: 10px;
+  }
+  
+  .content h2 {
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 24px;
+    font-weight: 500;
+    text-align: left;
+  }
+  
+  /* Collapsed State */
+  .media-player.collapsed {
+    padding: 12px;
+    min-height: 50px;
+  }
+  
+  .media-player.collapsed .content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+  
+  /* Animation for collapse/expand */
+  .media-player {
+    transform-origin: top;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .media-player.collapsed {
+    transform: translateY(0);
+  }
+  
+  /* SoundCloud iframe styling */
+  iframe {
+    border-radius: 12px !important;
+    margin-top: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .volume-control {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .volume-control input[type='range'] {
+    width: 60%;
+    margin-left: 10px;
+  }
+  

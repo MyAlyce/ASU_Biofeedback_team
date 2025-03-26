@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { subscribeHEGPlayback, unsubscribeHEGPlayback } from '../scripts/connect';
-import '../scripts/media/videocontrols.css';
+import '../styles/videocontrols.css';
 import { SoundCloudPlayer } from './players/soundcloud';
 
 const MediaPlayer = ({ id }: { id: string }) => {
@@ -13,9 +13,14 @@ const MediaPlayer = ({ id }: { id: string }) => {
   useEffect(() => {
     stateSub = subscribeHEGPlayback((data) => {
       console.log('HEG Data:', data);
-      let newVolume = volume + data.hegEffort[0];
+    
+      const time = performance.now() / 1000;
+      
+      let newVolume = 100 * Math.sin(time + data.hegEffort[0]*1.5); // Range 0-100    
       newVolume = Math.max(0, Math.min(100, newVolume));
+  
       setVolume(newVolume);
+  
       if (videoRef.current) {
         videoRef.current.volume = newVolume / 100;
       }
