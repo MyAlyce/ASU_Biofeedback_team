@@ -28,8 +28,8 @@ export class ShaderPlayer extends Component<ShaderPlayerProps, ShaderPlayerState
   
       this.state = {
         selectedGeometry: 'plane',
-        canvasWidth: props.canvasWidth || 512,
-        canvasHeight: props.canvasHeight || 512,
+        canvasWidth: 512,
+        canvasHeight: 512,
       };
   
       this.canvasRef = createRef<HTMLCanvasElement>();
@@ -43,10 +43,52 @@ export class ShaderPlayer extends Component<ShaderPlayerProps, ShaderPlayerState
 
       this.stateSub = subscribeHEGPlayback((data)=>{
         this.volume += data.hegEffort[0];
-        if(this.volume > 100) this.volume = 100;
+        if (this.volume > 100) 
+          this.volume = 100;
         else if (this.volume < 0) this.volume = 0;
-        if((this.shaderHelper.uniforms as any).iHEG) (this.shaderHelper.uniforms as any).iHEG.value = 2*data.heg[0];
-        this.sounds.sourceList.forEach((v,i) => {this.sounds.setVolume(i,this.volume/100);});  
+          this.sounds.sourceList.forEach((v,i) => {this.sounds.setVolume(i,this.volume/100);});
+        
+
+          //epilepsy warning. not sure how to make the transition seamless without a flicker.
+
+        if ((data.hegEffort[0] > 0) && (this.shaderHelper.canvas.width < 1024)) {
+          // make canvas ref bigger
+          this.shaderHelper.canvas.width = this.shaderHelper.canvas.width * (Math.sqrt(data.hegEffort[0] + 1));
+          this.shaderHelper.canvas.height = this.shaderHelper.canvas.height * (Math.sqrt(data.hegEffort[0] + 1));
+
+          console.log(this.shaderHelper.canvas.width);
+          //this.canvasRef.current.width = this.shaderHelper.canvas.width;
+          //this.canvasRef.current.height = this.shaderHelper.canvas.height;
+
+
+        }
+
+        if ((data.hegEffort[0] < 0) && (this.shaderHelper.canvas.width > 256)) {
+
+          this.shaderHelper.canvas.width = this.shaderHelper.canvas.width / Math.sqrt((1 - data.hegEffort[0]));
+          this.shaderHelper.canvas.height = this.shaderHelper.canvas.height / Math.sqrt((1- data.hegEffort[0]));
+
+          console.log(this.shaderHelper.canvas.width);
+
+       
+        }
+
+        this.shaderHelper.setUniforms({iTime: {value: performance.now() / 1000}});
+        this.shaderHelper.updateUniformSettings({iTime: performance.now() / 1000});
+
+        this.canvasRef.current.style.width = `${this.shaderHelper.canvas.width}px`;
+        this.canvasRef.current.style.height = `${this.shaderHelper.canvas.height}px`;
+        this.shaderHelper.setUniforms({
+          iResolution: { value: (this.shaderHelper.canvas.width, this.shaderHelper.canvas.height) }
+        });
+
+        this.shaderHelper.updateUniformSettings(
+          {iImage: (this.shaderHelper.canvas.width, this.shaderHelper.canvas.height)}
+        );
+
+        this.render();
+        
+        
       });
 
     }

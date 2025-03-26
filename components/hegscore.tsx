@@ -11,7 +11,7 @@ export class HEGscore extends Component {
 
     componentDidMount(): void {
         this.sub = subscribeHEGPlayback((data)=>{
-            if(this.currentRef.current) this.currentRef.current.innerText = `${data.hegScore[0]}`;
+            if(this.currentRef.current) this.currentRef.current.innerText = `${Number(data.hegScore[0]).toFixed(2)}`;
         });
     }
 

@@ -180,8 +180,12 @@ state.subscribeEvent('heg', (data:{heg:number, timestamp:number, [key:string]:an
 });
 
 
-export function resetHEGScore() {
-    state.data.hegScore = 0;
+export async function resetHEGScore() {
+    state.data.currentScore = 0; 
+    state.setState({'heg_processed':{heg:0, hegAvg2s:0, hegAvg4s:0, hegEffort:0, hegScore:0, timestamp:0}});
+
+    console.log('Reset Event', state.data.currentScore);
+
 }
 
 /**

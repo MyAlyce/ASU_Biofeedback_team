@@ -13,9 +13,14 @@ const MediaPlayer = ({ id }: { id: string }) => {
   useEffect(() => {
     stateSub = subscribeHEGPlayback((data) => {
       console.log('HEG Data:', data);
-      let newVolume = volume + data.hegEffort[0];
+    
+      const time = performance.now() / 1000;
+      
+      let newVolume = 100 * Math.sin(time + data.hegEffort[0]*1.5); // Range 0-100    
       newVolume = Math.max(0, Math.min(100, newVolume));
+  
       setVolume(newVolume);
+  
       if (videoRef.current) {
         videoRef.current.volume = newVolume / 100;
       }
@@ -33,13 +38,18 @@ const MediaPlayer = ({ id }: { id: string }) => {
 
   return (
     <div className={`media-player ${collapsed ? 'collapsed' : ''}`}>
+      {/* Collapse Button */}
       <button className="collapse-btn" onClick={toggleCollapse}>
-        {collapsed ? '↓ Show Player' : '↑ Hide Player'}
+        {collapsed ? '⏵Expand' : '⏷Minimize'}
       </button>
 
+      {/* Content inside the collapsible container */}
       <div className={`content ${collapsed ? 'hidden' : ''}`}>
-        <h2>SoundCloud Player</h2>
+        {/* SoundCloud Player */}
+        <h2>Connect to SoundCloud</h2>
         <SoundCloudPlayer autoPlay={true} color="blue" />
+
+        
       </div>
     </div>
   );

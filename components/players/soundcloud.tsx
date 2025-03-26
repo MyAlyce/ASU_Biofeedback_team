@@ -181,7 +181,7 @@ export class SoundCloudPlayer extends Component<SoundCloudPlayerProps, SoundClou
                     <button onClick={this.handleHEGVolume}>HEG Volume Control</button>
                     <div>
                         <label>
-                            Volume: {this.state.volume}%
+                            Volume: {Number(this.state.volume).toFixed(1)}%
                             <input 
                                 type="range" 
                                 min="0" 
