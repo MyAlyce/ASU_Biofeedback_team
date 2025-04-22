@@ -49,6 +49,17 @@ const MediaPlayer = ({ id }: { id: string }) => {
         <h2>Connect to SoundCloud</h2>
         <SoundCloudPlayer autoPlay={true} color="blue" />
 
+        {/* Spotify */}
+        <h2>Spotify</h2>
+        <iframe
+          src="https://open.spotify.com/embed/playlist/0EncHaaOPWyUSvpvwFRaS2?utm_source=generator"
+          width="100%"
+          height="152"
+          frameBorder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          style={{ borderRadius: '12px' }}
+        ></iframe>
         
       </div>
     </div>
