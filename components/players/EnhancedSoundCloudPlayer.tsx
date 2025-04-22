@@ -1,3 +1,4 @@
+// EnhancedSoundCloudPlayer with frequency and HEG visualization
 import React, { useEffect, useRef, useState } from 'react';
 import '../../styles/enhancedPlayer.css';
 import { MdOutlineSettingsSuggest } from 'react-icons/md';
@@ -8,6 +9,9 @@ import { FaVolumeUp, FaFilter, FaRedo } from 'react-icons/fa';
 import { MdSlowMotionVideo } from 'react-icons/md';
 import { BiBrain } from 'react-icons/bi';
 import { IoMdArrowDropup, IoMdArrowDropdown } from 'react-icons/io';
+import AudioHEGVisualizer from '../visualizations/AudioHEGVisualizer';
+import AudioFrequencyVisualizer from '../visualizations/AudioFrequencyVisualizer';
+import ShaderVisualizer from '../visualizations/ShaderVisualizer';
 
 interface EnhancedSoundCloudPlayerProps {
   trackUrl?: string;
@@ -64,6 +68,11 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   const [localMinHegScore, setLocalMinHegScore] = useState<number>(0);
   const [localMaxHegScore, setLocalMaxHegScore] = useState<number>(0);
   const [sessionStarted, setSessionStarted] = useState<boolean>(false);
+  
+  // State for visualizers
+  const [visualizersActive, setVisualizersActive] = useState(true);
+  const [activeVisualizer, setActiveVisualizer] = useState<'none' | 'frequency' | 'heg' | 'shader' | 'both'>('both');
+  const [shaderGeometry, setShaderGeometry] = useState<'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen'>('plane');
   
   // Track URL change detection
   useEffect(() => {
@@ -176,6 +185,70 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     };
   }, []);
 
+  // Set up audio nodes when stream URL is available
+  useEffect(() => {
+    if (streamUrl && audioContextRef.current) {
+      setupAudioNodes();
+    }
+  }, [streamUrl]);
+
+  // Set up audio nodes for Web Audio API processing
+  const setupAudioNodes = () => {
+    if (!audioContextRef.current || !streamUrl) return;
+    
+    try {
+      // For the frequency visualizer, we need to create a real audio element
+      if (!audioElementRef.current) {
+        audioElementRef.current = new Audio();
+        audioElementRef.current.crossOrigin = 'anonymous';
+        audioElementRef.current.volume = 0; // Keep muted to avoid double audio
+        audioElementRef.current.loop = true;
+        
+        // Add event handlers
+        audioElementRef.current.onplay = () => {
+          console.log('Hidden audio element playing (for visualization)');
+        };
+        
+        audioElementRef.current.onerror = (e) => {
+          console.error('Hidden audio element error:', e);
+        };
+        
+        // Handle autoplay issues
+        audioElementRef.current.oncanplay = () => {
+          if (isPlaying) {
+            audioElementRef.current?.play().catch(e => {
+              console.log('Autoplay prevented by browser. Waiting for user interaction.');
+            });
+          }
+        };
+      }
+      
+      // Set the audio source
+      if (streamUrl !== 'widget://soundcloud') {
+        audioElementRef.current.src = streamUrl;
+        audioElementRef.current.load();
+      } else {
+        console.warn('Using SoundCloud widget only, no direct audio stream available for visualization');
+      }
+      
+      // Create source node for visualization
+      if (audioElementRef.current && audioContextRef.current && !sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioElementRef.current);
+          // Connect to destination through our filter->gain chain
+          sourceNodeRef.current.connect(filterNodeRef.current!);
+          console.log('Audio source connected to audio graph for visualization');
+        } catch (e) {
+          console.error('Error creating source node:', e);
+        }
+      }
+      
+      console.log('Audio setup complete for visualization');
+    } catch (error) {
+      console.error('Error setting up audio nodes:', error);
+    }
+  };
+  
   // Update min/max HEG scores when HEG data changes
   useEffect(() => {
     if (!isHEGModeActive) return;
@@ -336,18 +409,6 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     }
   };
   
-  // Set up audio nodes for Web Audio API processing
-  const setupAudioNodes = () => {
-    if (!audioContextRef.current || !streamUrl) return;
-    
-    try {
-      // For tempo control, we'll rely on the SoundCloud widget directly
-      console.log('Audio setup complete, ready for controls');
-    } catch (error) {
-      console.error('Error setting up audio nodes:', error);
-    }
-  };
-  
   // Initialize the SoundCloud widget
   const initializeWidget = () => {
     setInitialState(false);
@@ -410,16 +471,35 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
             });
           }, 1000);
           
+          // Sync with our hidden audio element for visualization
+          if (audioElementRef.current) {
+            audioElementRef.current.currentTime = 0;
+            audioElementRef.current.play().catch(e => {
+              console.log('Auto-play prevented by browser for visualizer audio');
+            });
+          }
+          
           return () => clearInterval(positionInterval);
         });
         
         widgetInstance.bind(SC.Widget.Events.PAUSE, () => {
           setIsPlaying(false);
+          
+          // Sync with our hidden audio element
+          if (audioElementRef.current && !audioElementRef.current.paused) {
+            audioElementRef.current.pause();
+          }
         });
         
         widgetInstance.bind(SC.Widget.Events.FINISH, () => {
           setIsPlaying(false);
           setTrackInfo(prev => ({ ...prev, position: 0 }));
+          
+          // Sync with our hidden audio element
+          if (audioElementRef.current) {
+            audioElementRef.current.pause();
+            audioElementRef.current.currentTime = 0;
+          }
         });
         
         widgetInstance.bind(SC.Widget.Events.ERROR, () => {
@@ -517,6 +597,26 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     const seekPosition = trackInfo.duration * clickPosition;
     
     widget.seekTo(seekPosition);
+    
+    // Sync with audio element for visualization
+    if (audioElementRef.current) {
+      audioElementRef.current.currentTime = seekPosition / 1000; // Convert ms to seconds
+    }
+  };
+  
+  // Toggle visualizers
+  const toggleVisualizers = () => {
+    setVisualizersActive(!visualizersActive);
+  };
+  
+  // Change active visualizer
+  const changeVisualizer = (type: 'none' | 'frequency' | 'heg' | 'shader' | 'both') => {
+    setActiveVisualizer(type);
+  };
+  
+  // Change shader geometry
+  const handleGeometryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setShaderGeometry(e.target.value as 'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen');
   };
   
   // Format time in MM:SS
@@ -792,7 +892,110 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         </div>
       </div>
       
-      {/* Hidden audio element for Web Audio API-based tempo control */}
+      {/* Visualizer controls */}
+      <div className="visualizer-controls">
+        <div className="visualizer-toggle">
+          <button 
+            className={visualizersActive ? 'active' : ''}
+            onClick={toggleVisualizers}
+          >
+            {visualizersActive ? 'Hide Visualizers' : 'Show Visualizers'}
+          </button>
+        </div>
+        
+        {visualizersActive && (
+          <div className="visualizer-selector">
+            <button 
+              className={activeVisualizer === 'frequency' ? 'active' : ''}
+              onClick={() => changeVisualizer('frequency')}
+            >
+              Frequency
+            </button>
+            <button 
+              className={activeVisualizer === 'heg' ? 'active' : ''}
+              onClick={() => changeVisualizer('heg')}
+            >
+              HEG
+            </button>
+            <button 
+              className={activeVisualizer === 'shader' ? 'active' : ''}
+              onClick={() => changeVisualizer('shader')}
+            >
+              Shader
+            </button>
+            <button 
+              className={activeVisualizer === 'both' ? 'active' : ''}
+              onClick={() => changeVisualizer('both')}
+            >
+              All
+            </button>
+            <button 
+              className={activeVisualizer === 'none' ? 'active' : ''}
+              onClick={() => changeVisualizer('none')}
+            >
+              None
+            </button>
+          </div>
+        )}
+        
+        {/* Shader geometry selector - only show when shader is active */}
+        {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
+          <div className="shader-controls">
+            <select
+              value={shaderGeometry}
+              onChange={handleGeometryChange}
+              className="shader-geometry-select"
+            >
+              <option value="plane">Plane</option>
+              <option value="sphere">Sphere</option>
+              <option value="halfsphere">Half Sphere</option>
+              <option value="circle">Circle</option>
+              <option value="vrscreen">VR Screen</option>
+            </select>
+          </div>
+        )}
+      </div>
+      
+      {/* Visualizers */}
+      {visualizersActive && (activeVisualizer === 'frequency' || activeVisualizer === 'both') && (
+        <div className="visualizer frequency-visualizer">
+          <h4>Frequency Spectrum</h4>
+          <div className="visualizer-container">
+            <AudioFrequencyVisualizer 
+              audioContext={audioContextRef.current}
+              sourceNode={sourceNodeRef.current} 
+              isActive={isPlaying && visualizersActive} 
+            />
+          </div>
+        </div>
+      )}
+      
+      {visualizersActive && (activeVisualizer === 'heg' || activeVisualizer === 'both') && (
+        <div className="visualizer heg-visualizer">
+          <h4>Neural Activity</h4>
+          <div className="visualizer-container">
+            <AudioHEGVisualizer 
+              hegData={hegData} 
+              isActive={visualizersActive} 
+            />
+          </div>
+        </div>
+      )}
+      
+      {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
+        <div className="visualizer shader-visualizer">
+          <h4>Shader Visualization</h4>
+          <div className="visualizer-container shader-container">
+            <ShaderVisualizer
+              isActive={visualizersActive}
+              geometry={shaderGeometry}
+              hegData={hegData}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Hidden audio element for Web Audio API-based visualization */}
       <audio ref={audioElementRef} style={{ display: 'none' }} />
     </div>
   );

@@ -614,4 +614,170 @@
     width: 240px;
     border-radius: var(--radius-md);
   }
+}
+
+/* Visualizer-related styles */
+.visualizer-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: rgba(30, 30, 40, 0.7);
+  border-radius: 8px;
+  width: 100%;
+}
+
+.visualizer-toggle {
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.visualizer-toggle button {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #2c2c40;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.visualizer-toggle button:hover {
+  background-color: #3d3d57;
+}
+
+.visualizer-toggle button.active {
+  background-color: #5050a0;
+}
+
+.visualizer-selector {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.visualizer-selector button {
+  flex: 1;
+  margin: 0 0.25rem;
+  padding: 0.4rem 0.25rem;
+  background-color: #2c2c40;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.visualizer-selector button:first-child {
+  margin-left: 0;
+}
+
+.visualizer-selector button:last-child {
+  margin-right: 0;
+}
+
+.visualizer-selector button:hover {
+  background-color: #3d3d57;
+}
+
+.visualizer-selector button.active {
+  background-color: #5050a0;
+}
+
+.visualizer {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: rgba(20, 20, 30, 0.7);
+  border-radius: 8px;
+  width: 100%;
+}
+
+.visualizer h4 {
+  margin: 0 0 0.5rem 0;
+  color: white;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.visualizer-container {
+  width: 100%;
+  height: 120px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.frequency-visualizer .visualizer-container {
+  background-color: #051530;
+}
+
+.heg-visualizer .visualizer-container {
+  background-color: #333;
+}
+
+.audio-frequency-canvas,
+.audio-heg-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Shader visualizer specific styles */
+.shader-visualizer .visualizer-container {
+  background-color: #000;
+  height: 240px; /* Make shader container taller */
+}
+
+.shader-controls {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.shader-geometry-select {
+  background-color: #2c2c40;
+  color: white;
+  border: 1px solid #505080;
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shader-geometry-select:hover {
+  background-color: #3d3d57;
+}
+
+.shader-geometry-select:focus {
+  border-color: #6060a0;
+  box-shadow: 0 0 0 2px rgba(80, 80, 160, 0.3);
+}
+
+.shader-geometry-select option {
+  background-color: #1a1a2e;
+  color: white;
+}
+
+.shader-visualizer-canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background-color: #000;
+  display: block;
+  touch-action: none;
+}
+
+/* Update media queries for larger screens */
+@media (min-width: 768px) {
+  /* ... existing media query styles ... */
+  
+  .shader-visualizer .visualizer-container {
+    height: 320px; /* Even taller on desktop */
+  }
 } 
