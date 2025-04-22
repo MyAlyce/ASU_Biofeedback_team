@@ -69,10 +69,13 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   const [localMaxHegScore, setLocalMaxHegScore] = useState<number>(0);
   const [sessionStarted, setSessionStarted] = useState<boolean>(false);
   
-  // State for visualizers
+  // State for visualizers - ensure they're active by default
   const [visualizersActive, setVisualizersActive] = useState(true);
   const [activeVisualizer, setActiveVisualizer] = useState<'none' | 'frequency' | 'heg' | 'shader' | 'both'>('both');
   const [shaderGeometry, setShaderGeometry] = useState<'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen'>('plane');
+  
+  // Add state for visualizer refresh to force re-render when needed
+  const [visualizerRefreshKey, setVisualizerRefreshKey] = useState(0);
   
   // Track URL change detection
   useEffect(() => {
@@ -604,19 +607,29 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     }
   };
   
-  // Toggle visualizers
+  // Toggle visualizers with force refresh
   const toggleVisualizers = () => {
-    setVisualizersActive(!visualizersActive);
+    const newState = !visualizersActive;
+    setVisualizersActive(newState);
+    
+    // Force refresh visualizers by changing the key
+    setVisualizerRefreshKey(prev => prev + 1);
   };
   
-  // Change active visualizer
+  // Change active visualizer with force refresh
   const changeVisualizer = (type: 'none' | 'frequency' | 'heg' | 'shader' | 'both') => {
     setActiveVisualizer(type);
+    
+    // Force refresh visualizers by changing the key
+    setVisualizerRefreshKey(prev => prev + 1);
   };
   
-  // Change shader geometry
+  // Change shader geometry with force refresh
   const handleGeometryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setShaderGeometry(e.target.value as 'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen');
+    
+    // Force refresh visualizers by changing the key
+    setVisualizerRefreshKey(prev => prev + 1);
   };
   
   // Format time in MM:SS
@@ -794,210 +807,243 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   useEffect(() => {
     setHegControlMode(propHegControlMode);
   }, [propHegControlMode]);
+
+  // Add effect to ensure visualizers initialize properly
+  useEffect(() => {
+    if (visualizersActive) {
+      // Force a refresh of visualizers on component mount or when activated
+      const timer = setTimeout(() => {
+        setVisualizerRefreshKey(prev => prev + 1);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [visualizersActive]);
   
   return (
-    <div
-      className={classNames("enhanced-player", {
-        "enhanced-player--welcome": !initialState,
-        "enhanced-player--playing": isPlaying,
-        "enhanced-player--loading": isLoading,
-      })}
-    >
-      <div className="player-visuals">
-        {initialState ? (
-          renderWelcomeState()
-        ) : isLoading && !trackLoaded ? (
-          renderLoadingState()
-        ) : loadError ? (
-          renderErrorState()
-        ) : trackInfo.artwork ? (
-          <div className="artwork-container">
-            <img 
-              src={trackInfo.artwork} 
-              alt={trackInfo.title} 
-              className={`artwork ${isPlaying ? 'spinning' : ''}`}
-            />
-            <div className="player-status-badge">
-              {isPlaying ? (
-                <span className="status-playing">
-                  <i className="status-icon">▶</i> Playing
-                </span>
-              ) : trackLoaded ? (
-                <span className="status-loaded">
-                  <i className="status-icon">✓</i> Ready
-                </span>
-              ) : null}
+    <>
+      <div
+        className={classNames("enhanced-player", {
+          "enhanced-player--welcome": !initialState,
+          "enhanced-player--playing": isPlaying,
+          "enhanced-player--loading": isLoading,
+        })}
+      >
+        <div className="player-visuals">
+          {initialState ? (
+            renderWelcomeState()
+          ) : isLoading && !trackLoaded ? (
+            renderLoadingState()
+          ) : loadError ? (
+            renderErrorState()
+          ) : trackInfo.artwork ? (
+            <div className="artwork-container">
+              <img 
+                src={trackInfo.artwork} 
+                alt={trackInfo.title} 
+                className={`artwork ${isPlaying ? 'spinning' : ''}`}
+              />
+              <div className="player-status-badge">
+                {isPlaying ? (
+                  <span className="status-playing">
+                    <i className="status-icon">▶</i> Playing
+                  </span>
+                ) : trackLoaded ? (
+                  <span className="status-loaded">
+                    <i className="status-icon">✓</i> Ready
+                  </span>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="default-artwork">
-            <div className="artwork-placeholder">
-              <span>🎧</span>
+          ) : (
+            <div className="default-artwork">
+              <div className="artwork-placeholder">
+                <span>🎧</span>
+              </div>
             </div>
-          </div>
-        )}
-        
-        <iframe 
-          ref={iframeRef}
-          width="100%" 
-          height="0"  
-          frameBorder="0"
-          allow="autoplay"
-          className="hidden-iframe"
-        ></iframe>
-      </div>
-      
-      <div className="player-info">
-        {renderDetails()}
-        
-        <div className="player-controls">
-          <button 
-            className={`play-button ${initialState || !trackInfo.duration ? 'disabled' : ''}`}
-            onClick={togglePlay}
-            disabled={initialState || !trackInfo.duration || isLoading}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
+          )}
           
-          <div className="progress-container">
-            <div 
-              className="progress-bar"
-              onClick={handleSeek}
+          <iframe 
+            ref={iframeRef}
+            width="100%" 
+            height="0"  
+            frameBorder="0"
+            allow="autoplay"
+            className="hidden-iframe"
+          ></iframe>
+        </div>
+        
+        <div className="player-info">
+          {renderDetails()}
+          
+          <div className="player-controls">
+            <button 
+              className={`play-button ${initialState || !trackInfo.duration ? 'disabled' : ''}`}
+              onClick={togglePlay}
+              disabled={initialState || !trackInfo.duration || isLoading}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
             >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            
+            <div className="progress-container">
               <div 
-                className="progress-fill"
-                style={{ width: `${trackInfo.duration ? (trackInfo.position / trackInfo.duration) * 100 : 0}%` }}
-              ></div>
+                className="progress-bar"
+                onClick={handleSeek}
+              >
+                <div 
+                  className="progress-fill"
+                  style={{ width: `${trackInfo.duration ? (trackInfo.position / trackInfo.duration) * 100 : 0}%` }}
+                ></div>
+              </div>
+              <div className="time-display">
+                <span>{formatTime(trackInfo.position)}</span>
+                <span>{formatTime(trackInfo.duration)}</span>
+              </div>
             </div>
-            <div className="time-display">
-              <span>{formatTime(trackInfo.position)}</span>
-              <span>{formatTime(trackInfo.duration)}</span>
+            
+            <div className="volume-container">
+              <span className="volume-icon">🔊</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={handleVolumeChange}
+                className="volume-slider"
+                disabled={initialState || isLoading || !!loadError}
+              />
+              <span className="volume-value">{volume}%</span>
             </div>
+          </div>
+        </div>
+        
+        {/* Hidden audio element for Web Audio API-based visualization */}
+        <audio ref={audioElementRef} style={{ display: 'none' }} />
+      </div>
+      
+      {/* Moved visualizer controls and visualizers outside the main player container */}
+      <div className="visualizer-section" style={{ position: 'relative', zIndex: 10 }}>
+        {/* Visualizer controls */}
+        <div className="visualizer-controls">
+          <div className="visualizer-toggle">
+            <button 
+              className={visualizersActive ? 'active' : ''}
+              onClick={toggleVisualizers}
+            >
+              {visualizersActive ? 'Hide Visualizers' : 'Show Visualizers'}
+            </button>
           </div>
           
-          <div className="volume-container">
-            <span className="volume-icon">🔊</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={handleVolumeChange}
-              className="volume-slider"
-              disabled={initialState || isLoading || !!loadError}
-            />
-            <span className="volume-value">{volume}%</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Visualizer controls */}
-      <div className="visualizer-controls">
-        <div className="visualizer-toggle">
-          <button 
-            className={visualizersActive ? 'active' : ''}
-            onClick={toggleVisualizers}
-          >
-            {visualizersActive ? 'Hide Visualizers' : 'Show Visualizers'}
-          </button>
+          {visualizersActive && (
+            <div className="visualizer-selector">
+              <button 
+                className={activeVisualizer === 'frequency' ? 'active' : ''}
+                onClick={() => changeVisualizer('frequency')}
+              >
+                Frequency
+              </button>
+              <button 
+                className={activeVisualizer === 'heg' ? 'active' : ''}
+                onClick={() => changeVisualizer('heg')}
+              >
+                HEG
+              </button>
+              <button 
+                className={activeVisualizer === 'shader' ? 'active' : ''}
+                onClick={() => changeVisualizer('shader')}
+              >
+                Shader
+              </button>
+              <button 
+                className={activeVisualizer === 'both' ? 'active' : ''}
+                onClick={() => changeVisualizer('both')}
+              >
+                All
+              </button>
+              <button 
+                className={activeVisualizer === 'none' ? 'active' : ''}
+                onClick={() => changeVisualizer('none')}
+              >
+                None
+              </button>
+            </div>
+          )}
+          
+          {/* Shader geometry selector - only show when shader is active */}
+          {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
+            <div className="shader-controls">
+              <select
+                value={shaderGeometry}
+                onChange={handleGeometryChange}
+                className="shader-geometry-select"
+              >
+                <option value="plane">Plane</option>
+                <option value="sphere">Sphere</option>
+                <option value="halfsphere">Half Sphere</option>
+                <option value="circle">Circle</option>
+                <option value="vrscreen">VR Screen</option>
+              </select>
+            </div>
+          )}
         </div>
         
+        {/* Visualizers - Now using a grid layout with key for forced refresh */}
         {visualizersActive && (
-          <div className="visualizer-selector">
-            <button 
-              className={activeVisualizer === 'frequency' ? 'active' : ''}
-              onClick={() => changeVisualizer('frequency')}
-            >
-              Frequency
-            </button>
-            <button 
-              className={activeVisualizer === 'heg' ? 'active' : ''}
-              onClick={() => changeVisualizer('heg')}
-            >
-              HEG
-            </button>
-            <button 
-              className={activeVisualizer === 'shader' ? 'active' : ''}
-              onClick={() => changeVisualizer('shader')}
-            >
-              Shader
-            </button>
-            <button 
-              className={activeVisualizer === 'both' ? 'active' : ''}
-              onClick={() => changeVisualizer('both')}
-            >
-              All
-            </button>
-            <button 
-              className={activeVisualizer === 'none' ? 'active' : ''}
-              onClick={() => changeVisualizer('none')}
-            >
-              None
-            </button>
-          </div>
-        )}
-        
-        {/* Shader geometry selector - only show when shader is active */}
-        {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
-          <div className="shader-controls">
-            <select
-              value={shaderGeometry}
-              onChange={handleGeometryChange}
-              className="shader-geometry-select"
-            >
-              <option value="plane">Plane</option>
-              <option value="sphere">Sphere</option>
-              <option value="halfsphere">Half Sphere</option>
-              <option value="circle">Circle</option>
-              <option value="vrscreen">VR Screen</option>
-            </select>
+          <div className="visualizers-grid" style={{ position: 'relative', zIndex: 20 }} key={visualizerRefreshKey}>
+            {/* Frequency Visualizer */}
+            {(activeVisualizer === 'frequency' || activeVisualizer === 'both') && (
+              <div className="visualizer frequency-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
+                <h4>
+                  <RiSoundModuleLine className="visualizer-icon" />
+                  Audio Frequency Spectrum
+                </h4>
+                <div className="visualizer-container" style={{ zIndex: 40 }}>
+                  <AudioFrequencyVisualizer 
+                    audioContext={audioContextRef.current}
+                    sourceNode={sourceNodeRef.current} 
+                    isActive={true} 
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* HEG Visualizer */}
+            {(activeVisualizer === 'heg' || activeVisualizer === 'both') && (
+              <div className="visualizer heg-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
+                <h4>
+                  <BiBrain className="visualizer-icon" />
+                  Neural Activity
+                </h4>
+                <div className="visualizer-container" style={{ zIndex: 40 }}>
+                  <AudioHEGVisualizer 
+                    hegData={hegData} 
+                    isActive={true} 
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Shader Visualizer */}
+            {(activeVisualizer === 'shader' || activeVisualizer === 'both') && (
+              <div className="visualizer shader-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
+                <h4>
+                  <GiSoundWaves className="visualizer-icon" />
+                  3D Shader Visualization
+                </h4>
+                <div className="visualizer-container" style={{ zIndex: 40 }}>
+                  <ShaderVisualizer
+                    isActive={true}
+                    geometry={shaderGeometry}
+                    hegData={hegData}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
-      
-      {/* Visualizers */}
-      {visualizersActive && (activeVisualizer === 'frequency' || activeVisualizer === 'both') && (
-        <div className="visualizer frequency-visualizer">
-          <h4>Frequency Spectrum</h4>
-          <div className="visualizer-container">
-            <AudioFrequencyVisualizer 
-              audioContext={audioContextRef.current}
-              sourceNode={sourceNodeRef.current} 
-              isActive={isPlaying && visualizersActive} 
-            />
-          </div>
-        </div>
-      )}
-      
-      {visualizersActive && (activeVisualizer === 'heg' || activeVisualizer === 'both') && (
-        <div className="visualizer heg-visualizer">
-          <h4>Neural Activity</h4>
-          <div className="visualizer-container">
-            <AudioHEGVisualizer 
-              hegData={hegData} 
-              isActive={visualizersActive} 
-            />
-          </div>
-        </div>
-      )}
-      
-      {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
-        <div className="visualizer shader-visualizer">
-          <h4>Shader Visualization</h4>
-          <div className="visualizer-container shader-container">
-            <ShaderVisualizer
-              isActive={visualizersActive}
-              geometry={shaderGeometry}
-              hegData={hegData}
-            />
-          </div>
-        </div>
-      )}
-      
-      {/* Hidden audio element for Web Audio API-based visualization */}
-      <audio ref={audioElementRef} style={{ display: 'none' }} />
-    </div>
+    </>
   );
 };
 

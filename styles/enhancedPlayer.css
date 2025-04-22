@@ -6,12 +6,13 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  margin: 0;
+  margin: 0 0 2rem 0;
   width: 100%;
   box-shadow: var(--shadow-medium);
   position: relative;
   padding: var(--space-4);
   gap: var(--space-4);
+  z-index: 5;
 }
 
 /* Player visuals section */
@@ -688,12 +689,59 @@
   background-color: #5050a0;
 }
 
-.visualizer {
+/* New Grid Layout for Visualizers */
+.visualizers-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  width: 100%;
   margin-top: 1rem;
-  padding: 0.5rem;
-  background-color: rgba(20, 20, 30, 0.7);
+  position: relative;
+  z-index: 20;
+  min-height: 200px;
+}
+
+/* At medium+ screens, show 2 visualizers per row */
+@media (min-width: 768px) {
+  .visualizers-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* When all 3 are shown, make the shader take up full width */
+  .visualizers-grid .shader-visualizer {
+    grid-column: 1 / -1;
+  }
+}
+
+/* At large screens, show all 3 in a row if space allows */
+@media (min-width: 1200px) {
+  .visualizers-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  /* Remove the full width of shader at large screens */
+  .visualizers-grid .shader-visualizer {
+    grid-column: auto;
+  }
+}
+
+.visualizer {
+  margin-top: 0;
+  padding: 0.8rem;
+  background-color: rgba(20, 20, 30, 0.85);
   border-radius: 8px;
   width: 100%;
+  border: 1px solid rgba(80, 80, 160, 0.3);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.visualizer:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2);
 }
 
 .visualizer h4 {
@@ -701,21 +749,60 @@
   color: white;
   font-size: 0.9rem;
   text-align: center;
+  background-color: rgba(30, 30, 50, 0.5);
+  padding: 0.3rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.visualizer-icon {
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.frequency-visualizer h4 {
+  background: linear-gradient(90deg, rgba(58, 134, 255, 0.3), rgba(30, 30, 50, 0.5));
+  border-left: 3px solid var(--accent-primary);
+}
+
+.heg-visualizer h4 {
+  background: linear-gradient(90deg, rgba(131, 56, 236, 0.3), rgba(30, 30, 50, 0.5));
+  border-left: 3px solid var(--accent-secondary);
+}
+
+.shader-visualizer h4 {
+  background: linear-gradient(90deg, rgba(255, 0, 110, 0.3), rgba(30, 30, 50, 0.5));
+  border-left: 3px solid var(--accent-tertiary);
 }
 
 .visualizer-container {
   width: 100%;
-  height: 120px;
+  height: 200px;
   border-radius: 6px;
   overflow: hidden;
+  background-color: #000;
+  position: relative;
+  z-index: 40;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3), inset 0 0 5px rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(100, 100, 200, 0.3);
 }
 
 .frequency-visualizer .visualizer-container {
   background-color: #051530;
+  min-height: 200px;
 }
 
 .heg-visualizer .visualizer-container {
-  background-color: #333;
+  background-color: #15051F;
+  min-height: 200px;
+}
+
+.shader-visualizer .visualizer-container {
+  background-color: #000;
+  min-height: 300px;
 }
 
 .audio-frequency-canvas,
@@ -725,11 +812,6 @@
 }
 
 /* Shader visualizer specific styles */
-.shader-visualizer .visualizer-container {
-  background-color: #000;
-  height: 240px; /* Make shader container taller */
-}
-
 .shader-controls {
   display: flex;
   justify-content: center;
@@ -775,9 +857,38 @@
 
 /* Update media queries for larger screens */
 @media (min-width: 768px) {
-  /* ... existing media query styles ... */
-  
   .shader-visualizer .visualizer-container {
-    height: 320px; /* Even taller on desktop */
+    min-height: 400px;
+  }
+  
+  .frequency-visualizer .visualizer-container,
+  .heg-visualizer .visualizer-container {
+    min-height: 300px;
+  }
+}
+
+/* Visualizer Section */
+.visualizer-section {
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: linear-gradient(to bottom, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  border: 1px solid rgba(80, 100, 200, 0.2);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 10;
+  overflow: visible;
+  clear: both;
+}
+
+@media (min-width: 768px) {
+  .visualizer-section {
+    margin-top: 3rem;
+    padding: var(--space-6);
   }
 } 
