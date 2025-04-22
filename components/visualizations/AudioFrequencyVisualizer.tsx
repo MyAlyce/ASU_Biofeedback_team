@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface AudioFrequencyVisualizerProps {
   audioContext: AudioContext | null;
@@ -8,142 +8,272 @@ interface AudioFrequencyVisualizerProps {
 
 const AudioFrequencyVisualizer: React.FC<AudioFrequencyVisualizerProps> = ({ 
   audioContext, 
-  sourceNode, 
-  isActive 
+  sourceNode,
+  isActive
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>(0);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-
+  const animationRef = useRef<number>(0);
+  const analyzerRef = useRef<AnalyserNode | null>(null);
+  const [frequencyBins, setFrequencyBins] = useState<Uint8Array | null>(null);
+  const [timeData, setTimeData] = useState<Uint8Array | null>(null);
+  
+  // Peak data history for consistent waveform display
+  const [peakData, setPeakData] = useState<number[]>([]);
+  const [waveformHistory, setWaveformHistory] = useState<number[]>([]);
+  
+  // Canvas styles
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [progress, setProgress] = useState(0); // 0-1 for playback progress
+  
+  // Colors
+  const baseColor = '#81D8D0';    // SoundCloud style teal
+  const playedColor = '#f50';     // SoundCloud style orange for played portion
+  const bgColor = '#f5f5f5';      // Light background
+  
+  // Set up analyzer and data arrays
   useEffect(() => {
-    if (!isActive || !audioContext || !sourceNode) return;
-
-    // Create analyzer node if it doesn't exist
-    if (!analyserRef.current) {
-      try {
-        analyserRef.current = audioContext.createAnalyser();
-        analyserRef.current.fftSize = 2048;
-        analyserRef.current.smoothingTimeConstant = 0.8;
+    if (!audioContext || !sourceNode || !isActive) return;
+    
+    try {
+      // Create analyzer if it doesn't exist
+      if (!analyzerRef.current) {
+        analyzerRef.current = audioContext.createAnalyser();
+        analyzerRef.current.fftSize = 2048; // Higher value for smoother waveform
+        analyzerRef.current.smoothingTimeConstant = 0.2;
         
-        // Connect source to analyzer (don't disconnect existing connections)
-        sourceNode.connect(analyserRef.current);
-      } catch (err) {
-        console.error('Error creating analyzer node:', err);
-        return;
+        // Connect source to analyzer
+        sourceNode.connect(analyzerRef.current);
+        
+        // Create data arrays
+        const bufferLength = analyzerRef.current.frequencyBinCount;
+        setFrequencyBins(new Uint8Array(bufferLength));
+        setTimeData(new Uint8Array(bufferLength));
+        
+        // Initialize peak data array
+        setPeakData(Array(200).fill(0)); // Start with 200 data points
+        setWaveformHistory(Array(200).fill(0.5)); // Middle value for waveform
+        
+        console.log('Audio frequency analyzer set up, buffer length:', bufferLength);
       }
+    } catch (error) {
+      console.error('Error setting up audio analyzer:', error);
     }
-
+    
+    // Clean up
+    return () => {
+      if (analyzerRef.current && sourceNode) {
+        try {
+          sourceNode.disconnect(analyzerRef.current);
+          analyzerRef.current = null;
+        } catch (e) {
+          console.error('Error disconnecting analyzer:', e);
+        }
+      }
+      
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [audioContext, sourceNode, isActive]);
+  
+  // Resize handler
+  useEffect(() => {
+    const handleResize = () => {
+      if (canvasRef.current) {
+        setDimensions({
+          width: canvasRef.current.clientWidth,
+          height: canvasRef.current.clientHeight
+        });
+      }
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+  
+  // Update dimensions on the canvas element when they change
+  useEffect(() => {
+    if (canvasRef.current && dimensions.width > 0 && dimensions.height > 0) {
+      canvasRef.current.width = dimensions.width;
+      canvasRef.current.height = dimensions.height;
+    }
+  }, [dimensions]);
+  
+  // Fake a tracking progress value for demonstration (remove this in production)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (sourceNode?.mediaElement) {
+        const element = sourceNode.mediaElement;
+        if (!element.paused && element.duration) {
+          setProgress(element.currentTime / element.duration);
+        }
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, [sourceNode]);
+  
+  // Main drawing function
+  useEffect(() => {
+    if (!isActive || !canvasRef.current || !analyzerRef.current || !frequencyBins || !timeData) return;
+    
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    // Set canvas dimensions
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
-    // Create data array for frequency data
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
+    
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Animation function
     const draw = () => {
-      if (!ctx || !analyser) return;
-
-      // Request next frame first to ensure smooth animation
-      animationFrameRef.current = requestAnimationFrame(draw);
-      
-      // Get frequency data
-      analyser.getByteFrequencyData(dataArray);
+      if (!analyzerRef.current || !ctx || !frequencyBins || !timeData) return;
       
       // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, width, height);
       
-      // Create gradient background
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, 'rgba(0, 25, 50, 1)');
-      gradient.addColorStop(1, 'rgba(0, 5, 25, 1)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw frequency bars
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let x = 0;
-      
-      for (let i = 0; i < bufferLength; i++) {
-        if (i % 2 === 0) { // Skip every other value for better visual spacing
-          const barHeight = (dataArray[i] / 255) * canvas.height;
-          
-          // Create gradient for bars
-          const barGradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
-          barGradient.addColorStop(0, 'rgba(0, 220, 255, 0.9)');
-          barGradient.addColorStop(0.5, 'rgba(100, 180, 255, 0.7)');
-          barGradient.addColorStop(1, 'rgba(180, 100, 255, 0.5)');
-          
-          ctx.fillStyle = barGradient;
-          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-          
-          x += barWidth + 1;
+      try {
+        // Get frequency and time domain data
+        analyzerRef.current.getByteFrequencyData(frequencyBins);
+        analyzerRef.current.getByteTimeDomainData(timeData);
+        
+        // Calculate peak data (average of frequency bins)
+        const newPeakData = [...peakData];
+        newPeakData.shift(); // Remove oldest data point
+        
+        // Calculate a new peak value based on frequency data
+        let sum = 0;
+        for (let i = 0; i < frequencyBins.length; i++) {
+          sum += frequencyBins[i];
         }
+        const average = sum / frequencyBins.length / 255; // Normalize to 0-1
+        newPeakData.push(average);
+        setPeakData(newPeakData);
+        
+        // Calculate a new waveform value based on time domain data
+        const newWaveformHistory = [...waveformHistory];
+        newWaveformHistory.shift();
+        
+        let waveformSum = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          waveformSum += Math.abs((timeData[i] / 128.0) - 1.0); // Normalize to 0-1 from center
+        }
+        const waveformAvg = Math.min(1, waveformSum / timeData.length * 2);
+        newWaveformHistory.push(waveformAvg);
+        setWaveformHistory(newWaveformHistory);
+        
+        // Draw SoundCloud style waveform
+        drawWaveform(ctx, width, height, newPeakData, progress);
+        
+        // Draw oscilloscope style waveform overlay
+        drawOscilloscope(ctx, width, height, timeData);
+      } catch (error) {
+        console.error('Error in visualization loop:', error);
       }
       
-      // Draw time domain waveform on top
-      analyser.getByteTimeDomainData(dataArray);
-      
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = 2;
-      
-      const sliceWidth = canvas.width / bufferLength;
-      x = 0;
-      
-      for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128.0;
-        const y = v * canvas.height / 2;
-        
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-        
-        x += sliceWidth;
-      }
-      
-      ctx.stroke();
+      // Continue animation
+      animationRef.current = requestAnimationFrame(draw);
     };
     
     // Start animation
     draw();
     
-    // Cleanup
+    // Clean up on unmount or when dependencies change
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      cancelAnimationFrame(animationRef.current);
+    };
+  }, [isActive, frequencyBins, timeData, peakData, waveformHistory, dimensions, progress]);
+  
+  // Draw SoundCloud style waveform
+  const drawWaveform = (
+    ctx: CanvasRenderingContext2D, 
+    width: number, 
+    height: number, 
+    data: number[], 
+    progress: number
+  ) => {
+    // Fill background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, width, height);
+    
+    const barWidth = width / data.length;
+    const progressPosition = width * progress;
+    
+    // Draw each bar
+    for (let i = 0; i < data.length; i++) {
+      const x = i * barWidth;
+      const barHeight = data[i] * height * 0.8; // 80% of height max
+      const y = (height - barHeight) / 2;
+      
+      // Use played color for the portion that's been played
+      if (x < progressPosition) {
+        ctx.fillStyle = playedColor;
+      } else {
+        ctx.fillStyle = baseColor;
       }
       
-      // Disconnect analyzer when component unmounts or becomes inactive
-      if (analyserRef.current) {
-        try {
-          sourceNode.disconnect(analyserRef.current);
-        } catch (e) {
-          // Handle disconnection errors
-          console.log('Note: Analyzer already disconnected');
-        }
+      // Draw a rounded bar
+      ctx.beginPath();
+      const radius = Math.min(barWidth / 2, barHeight / 8); // Subtle rounding
+      
+      if (barHeight > 0) {
+        // Draw a rounded rectangle for each bar
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight - radius);
+        ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - radius, y + barHeight);
+        ctx.lineTo(x + radius, y + barHeight);
+        ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.fill();
       }
-    };
-  }, [audioContext, sourceNode, isActive]);
+    }
+  };
+  
+  // Draw oscilloscope style waveform overlay
+  const drawOscilloscope = (
+    ctx: CanvasRenderingContext2D, 
+    width: number, 
+    height: number, 
+    timeData: Uint8Array
+  ) => {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    
+    const sliceWidth = width / timeData.length;
+    let x = 0;
+    
+    for (let i = 0; i < timeData.length; i++) {
+      const v = timeData[i] / 128.0;
+      const y = v * height / 2;
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+      
+      x += sliceWidth;
+    }
+    
+    ctx.stroke();
+  };
   
   return (
     <canvas 
       ref={canvasRef} 
-      className="audio-frequency-canvas"
-      style={{ 
-        width: '100%', 
+      className="audio-frequency-visualizer"
+      style={{
+        width: '100%',
         height: '100%',
-        background: '#051530',
-        borderRadius: '6px'
+        borderRadius: '8px',
+        backgroundColor: bgColor
       }}
     />
   );

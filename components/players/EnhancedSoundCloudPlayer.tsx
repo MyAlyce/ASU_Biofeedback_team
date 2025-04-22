@@ -1,5 +1,5 @@
 // EnhancedSoundCloudPlayer with frequency and HEG visualization
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import '../../styles/enhancedPlayer.css';
 import { MdOutlineSettingsSuggest } from 'react-icons/md';
 import { RiSoundModuleLine } from 'react-icons/ri';
@@ -11,7 +11,14 @@ import { BiBrain } from 'react-icons/bi';
 import { IoMdArrowDropup, IoMdArrowDropdown } from 'react-icons/io';
 import AudioHEGVisualizer from '../visualizations/AudioHEGVisualizer';
 import AudioFrequencyVisualizer from '../visualizations/AudioFrequencyVisualizer';
+import AudioWaveformVisualizer from '../visualizations/AudioWaveformVisualizer';
 import ShaderVisualizer from '../visualizations/ShaderVisualizer';
+import { VscEyeClosed } from 'react-icons/vsc';
+
+// Define volume constants
+const MIN_VOLUME = 50;
+const MAX_VOLUME = 100;
+const VOLUME_RANGE = MAX_VOLUME - MIN_VOLUME;
 
 interface EnhancedSoundCloudPlayerProps {
   trackUrl?: string;
@@ -40,9 +47,10 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   const gainNodeRef = useRef<GainNode | null>(null);
   const filterNodeRef = useRef<BiquadFilterNode | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const playbackRateProcessor = useRef<any>(null);
   const [widget, setWidget] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(50);
+  const [volume, setVolume] = useState(Math.max(MIN_VOLUME, 50));
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -50,7 +58,7 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   const [trackLoaded, setTrackLoaded] = useState(false);
   const [initialState, setInitialState] = useState(true);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [currentPlaybackRate, setCurrentPlaybackRate] = useState(1.0);
+  const [currentPlaybackRate, setCurrentPlaybackRate] = useState<number>(1.0);
   const [trackInfo, setTrackInfo] = useState({
     title: '',
     artist: '',
@@ -71,7 +79,7 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   
   // State for visualizers - ensure they're active by default
   const [visualizersActive, setVisualizersActive] = useState(true);
-  const [activeVisualizer, setActiveVisualizer] = useState<'none' | 'frequency' | 'heg' | 'shader' | 'both'>('both');
+  const [activeVisualizer, setActiveVisualizer] = useState<'frequency' | 'heg' | 'shader' | 'all' | 'none'>('none');
   const [shaderGeometry, setShaderGeometry] = useState<'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen'>('plane');
   
   // Add state for visualizer refresh to force re-render when needed
@@ -200,16 +208,24 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     if (!audioContextRef.current || !streamUrl) return;
     
     try {
-      // For the frequency visualizer, we need to create a real audio element
+      console.log('Setting up audio nodes with stream URL:', streamUrl);
+      
+      // For the frequency visualizer and tempo control, we need to create a real audio element
       if (!audioElementRef.current) {
         audioElementRef.current = new Audio();
         audioElementRef.current.crossOrigin = 'anonymous';
-        audioElementRef.current.volume = 0; // Keep muted to avoid double audio
+        audioElementRef.current.volume = 1.0; // Set to full volume for visualization
         audioElementRef.current.loop = true;
+        
+        // Set playbackRate property if supported by the browser
+        if ('playbackRate' in audioElementRef.current) {
+          audioElementRef.current.playbackRate = currentPlaybackRate;
+          console.log(`Initial playback rate set to ${currentPlaybackRate}x`);
+        }
         
         // Add event handlers
         audioElementRef.current.onplay = () => {
-          console.log('Hidden audio element playing (for visualization)');
+          console.log('Hidden audio element playing (for visualization and tempo control)');
         };
         
         audioElementRef.current.onerror = (e) => {
@@ -226,27 +242,74 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         };
       }
       
-      // Set the audio source
+      // Try to get a direct stream URL, not just from widget
       if (streamUrl !== 'widget://soundcloud') {
         audioElementRef.current.src = streamUrl;
         audioElementRef.current.load();
+        console.log('Loaded direct stream URL into audio element');
       } else {
-        console.warn('Using SoundCloud widget only, no direct audio stream available for visualization');
+        console.warn('Using SoundCloud widget only, no direct audio stream available for visualization or tempo control');
+        // Try to get stream URL again from another approach
+        if (currentTrackUrl) {
+          getStreamUrl(currentTrackUrl).then(streamUrl => {
+            if (streamUrl && audioElementRef.current && streamUrl !== 'widget://soundcloud') {
+              audioElementRef.current.src = streamUrl;
+              audioElementRef.current.load();
+              console.log('Successfully loaded audio stream for visualization and tempo control');
+              
+              // If we're already playing, try to sync and play the audio element
+              if (isPlaying) {
+                widget?.getPosition((position: number) => {
+                  audioElementRef.current!.currentTime = position / 1000; // Convert ms to seconds
+                  audioElementRef.current!.play().catch(console.error);
+                });
+              }
+            }
+          });
+        }
       }
       
-      // Create source node for visualization
+      // Create source node for visualization and tempo control
       if (audioElementRef.current && audioContextRef.current && !sourceNodeRef.current) {
         try {
+          // Resume audio context if it's suspended
+          if (audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume();
+          }
+          
           sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioElementRef.current);
-          // Connect to destination through our filter->gain chain
-          sourceNodeRef.current.connect(filterNodeRef.current!);
-          console.log('Audio source connected to audio graph for visualization');
+          
+          // Create nodes if they don't exist
+          if (!filterNodeRef.current) {
+            filterNodeRef.current = audioContextRef.current.createBiquadFilter();
+            filterNodeRef.current.type = 'lowpass';
+            filterNodeRef.current.frequency.value = 20000; // Default to max frequency
+          }
+          
+          if (!gainNodeRef.current) {
+            gainNodeRef.current = audioContextRef.current.createGain();
+            gainNodeRef.current.gain.value = volume / 100;
+          }
+          
+          // Connect nodes in series: source -> filter -> gain -> destination
+          sourceNodeRef.current.connect(filterNodeRef.current);
+          filterNodeRef.current.connect(gainNodeRef.current);
+          gainNodeRef.current.connect(audioContextRef.current.destination);
+          
+          console.log('Audio source connected to audio graph for visualization and tempo control');
+          
+          // Ensure the gain node is set with the current volume
+          gainNodeRef.current.gain.value = volume / 100;
+          console.log(`Initial gain set to ${volume / 100}`);
+          
+          // Force refresh visualizers since audio is now available
+          setVisualizerRefreshKey(prev => prev + 1);
         } catch (e) {
           console.error('Error creating source node:', e);
         }
       }
       
-      console.log('Audio setup complete for visualization');
+      console.log('Audio setup complete for visualization and tempo control');
     } catch (error) {
       console.error('Error setting up audio nodes:', error);
     }
@@ -280,24 +343,50 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     
     // Apply different controls based on mode
     if (hegControlMode === 'volume') {
-      let newVolume = volume; // Start with current volume instead of defaulting to 50%
+      let newVolume = volume; // Start with current volume
       
       if (sessionStarted && localMinHegScore !== localMaxHegScore) {
         // Normalize hegScore to 0-100 range based on local min/max
         const scoreRange = localMaxHegScore - localMinHegScore;
         const normalizedScore = (hegData.hegScore - localMinHegScore) / scoreRange;
-        newVolume = Math.max(0, Math.min(100, normalizedScore * 100));
+        
+        // Map normalized score (0-1) to volume range (MIN_VOLUME-MAX_VOLUME)
+        newVolume = MIN_VOLUME + (normalizedScore * VOLUME_RANGE);
+        newVolume = Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, newVolume));
       } else if (!sessionStarted || hegData.hegScore === 0) {
-        // Only keep current volume until we get actual HEG data
+        // Keep current volume until we have enough HEG data for calibration
         return;
       }
       
       setVolume(newVolume);
-      widget.setVolume(newVolume / 100);
       
-      // Also update gain node if we're using Web Audio API
+      // CRITICAL: Set volume in ALL places to ensure it works
+      // 1. Set SoundCloud widget volume
+      if (widget) {
+        try {
+          widget.setVolume(newVolume / 100);
+        } catch (e) {
+          console.error('Failed to set widget volume:', e);
+        }
+      }
+      
+      // 2. Set gain node volume for Web Audio API
       if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = newVolume / 100;
+        try {
+          gainNodeRef.current.gain.value = newVolume / 100;
+        } catch (e) {
+          console.error('Failed to set gain node volume:', e);
+        }
+      }
+      
+      // 3. Set device audio element volume as a fallback
+      if (audioElementRef.current) {
+        try {
+          // For device audio we can use full volume
+          audioElementRef.current.volume = 1.0;
+        } catch (e) {
+          console.error('Failed to set audio element volume:', e);
+        }
       }
       
       if (isDevMode) {
@@ -312,7 +401,10 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         // Normalize hegScore to 0-100 range based on local min/max
         const scoreRange = localMaxHegScore - localMinHegScore;
         const normalizedScore = (hegData.hegScore - localMinHegScore) / scoreRange;
-        filterAmount = Math.max(0, Math.min(100, normalizedScore * 100));
+        
+        // Map the normalized score to a filter amount between MIN_VOLUME and MAX_VOLUME
+        filterAmount = MIN_VOLUME + (normalizedScore * VOLUME_RANGE);
+        filterAmount = Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, filterAmount));
       } else if (!sessionStarted || hegData.hegScore === 0) {
         // Only keep current volume until we get actual HEG data
         return;
@@ -345,24 +437,26 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         const newRate = 0.5 + (normalizedScore * 1.0);
         const clampedRate = Math.max(0.5, Math.min(1.5, newRate));
         
-        setCurrentPlaybackRate(clampedRate);
-        
-        // Update the SoundCloud widget's playback rate
-        if (widget) {
-          // First get current position
-          widget.getPosition((currentPosition: number) => {
-            // SoundCloud API doesn't directly support tempo changes
-            // We can simulate it by adjusting playback behavior
-            
-            // Store current position and playing state
-            const wasPlaying = isPlaying;
-            
-            // Apply the effect by controlling playback if needed
-            if (wasPlaying) {
-              // The next time the widget's events fire, the tempo will be applied
-              widget.seekTo(currentPosition);
+        // Only update if the rate has changed significantly
+        if (Math.abs(clampedRate - currentPlaybackRate) > 0.01) {
+          setCurrentPlaybackRate(clampedRate);
+          
+          // Update the audio element's playback rate
+          if (audioElementRef.current && 'playbackRate' in audioElementRef.current) {
+            try {
+              audioElementRef.current.playbackRate = clampedRate;
+              
+              // Also update the widget volume to compensate for tempo changes
+              // Lower volumes at higher speeds can help perception
+              if (widget) {
+                const volCompensation = 1.0 - ((clampedRate - 1.0) * 0.2);
+                const compensatedVol = Math.max(0.4, volCompensation) * (volume / 100);
+                widget.setVolume(compensatedVol);
+              }
+            } catch (e) {
+              console.error('Error setting playback rate:', e);
             }
-          });
+          }
         }
         
         if (isDevMode) {
@@ -374,34 +468,128 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   
   // Reset session data when HEG mode or control mode changes
   useEffect(() => {
+    // Don't reset volume when toggling HEG mode, only reset calibration data
     setSessionStarted(false);
     setLocalMinHegScore(0);
     setLocalMaxHegScore(0);
+    
+    // If we're turning off HEG mode, restore default volume
+    if (!isHEGModeActive) {
+      const defaultVolume = 75; // Higher default volume when exiting HEG mode
+      setVolume(defaultVolume);
+      
+      // Update volume in all necessary places
+      if (widget) {
+        try {
+          widget.setVolume(defaultVolume / 100);
+        } catch (e) {
+          console.error('Failed to set widget volume:', e);
+        }
+      }
+      
+      if (gainNodeRef.current) {
+        try {
+          gainNodeRef.current.gain.value = defaultVolume / 100;
+        } catch (e) {
+          console.error('Failed to set gain node volume:', e);
+        }
+      }
+    }
   }, [isHEGModeActive, hegControlMode]);
   
   // Get stream URL for direct audio playback
   const getStreamUrl = async (scUrl: string) => {
     try {
-      // Try to get the stream URL via a direct SoundCloud API call
-      const clientId = 'a3e059563d7fd3372b49b37f00a00bcf';
-      const resolveUrl = `https://api.soundcloud.com/resolve.json?url=${encodeURIComponent(scUrl)}&client_id=${clientId}`;
+      // Try multiple approaches to get a stream URL
+      console.log('Attempting to get stream URL for:', scUrl);
       
-      try {
-        const response = await fetch(resolveUrl);
-        const data = await response.json();
-        
-        if (data.stream_url) {
-          const streamWithId = `${data.stream_url}?client_id=${clientId}`;
-          setStreamUrl(streamWithId);
-          console.log('Got stream URL from API:', streamWithId);
-          return streamWithId;
+      // First try - direct SoundCloud API with client ID
+      const clientIds = [
+        'a3e059563d7fd3372b49b37f00a00bcf', // Primary client ID
+        'c5a171200f3a607a5f338f9a6d75072b', // Alternative client ID
+        '6ibGMJCmEUKJDLKsLshVZ94JwWGUHGMR', // Another alternative
+      ];
+      
+      // Try each client ID until one works
+      for (const clientId of clientIds) {
+        try {
+          const resolveUrl = `https://api.soundcloud.com/resolve.json?url=${encodeURIComponent(scUrl)}&client_id=${clientId}`;
+          const response = await fetch(resolveUrl);
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.stream_url) {
+              const streamWithId = `${data.stream_url}?client_id=${clientId}`;
+              setStreamUrl(streamWithId);
+              console.log('Got stream URL from API:', streamWithId);
+              return streamWithId;
+            }
+          }
+        } catch (apiError) {
+          console.warn(`SoundCloud API request failed with client ID ${clientId}:`, apiError);
         }
-      } catch (apiError) {
-        console.warn('SoundCloud API request failed:', apiError);
       }
       
-      // If we couldn't get a stream URL, create a simple proxy
-      // This is primarily for tempo control functionality
+      // Second try - extract from widget iframe
+      if (widget && iframeRef.current) {
+        try {
+          console.log('Attempting to extract stream URL from widget iframe...');
+          
+          // We'll attempt to extract the stream URL from the widget
+          const iframeDocument = iframeRef.current.contentDocument || 
+                                (iframeRef.current.contentWindow?.document);
+          
+          if (iframeDocument) {
+            // Look for audio elements or streaming URLs in the iframe
+            const audioElements = iframeDocument.querySelectorAll('audio');
+            if (audioElements.length > 0) {
+              const src = audioElements[0].src;
+              if (src) {
+                setStreamUrl(src);
+                console.log('Got stream URL from widget iframe:', src);
+                return src;
+              }
+            }
+            
+            // Look for streaming URLs in scripts
+            const scripts = iframeDocument.querySelectorAll('script');
+            for (let i = 0; i < scripts.length; i++) {
+              const scriptContent = scripts[i].textContent || '';
+              const urlMatch = scriptContent.match(/"streamUrl":"([^"]+)"/);
+              if (urlMatch && urlMatch[1]) {
+                const streamUrl = urlMatch[1].replace(/\\u0026/g, '&');
+                setStreamUrl(streamUrl);
+                console.log('Got stream URL from widget script:', streamUrl);
+                return streamUrl;
+              }
+            }
+          }
+        } catch (extractError) {
+          console.warn('Error extracting stream URL from widget:', extractError);
+        }
+      }
+      
+      // Third try - attempt to use a proxy service
+      try {
+        console.log('Attempting to use proxy service to get stream URL...');
+        const proxyUrl = `https://cors-anywhere.herokuapp.com/${scUrl}`;
+        const response = await fetch(proxyUrl);
+        const html = await response.text();
+        
+        // Look for stream URL in the HTML
+        const urlMatch = html.match(/"stream_url":"([^"]+)"/);
+        if (urlMatch && urlMatch[1]) {
+          const streamUrl = urlMatch[1].replace(/\\u0026/g, '&');
+          setStreamUrl(streamUrl);
+          console.log('Got stream URL from proxy service:', streamUrl);
+          return streamUrl;
+        }
+      } catch (proxyError) {
+        console.warn('Error using proxy service:', proxyError);
+      }
+
+      // If all else fails, use widget placeholder
       console.warn('Could not get SoundCloud stream URL, using widget directly');
       setStreamUrl('widget://soundcloud');
       return 'widget://soundcloud';
@@ -442,7 +630,14 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         
         widgetInstance.bind(SC.Widget.Events.READY, () => {
           setLoadingProgress(90);
-          widgetInstance.setVolume(volume / 100);
+          // CRITICAL: Ensure volume is set correctly when widget is ready
+          try {
+            const volumeValue = volume / 100;
+            widgetInstance.setVolume(volumeValue);
+            console.log(`Widget volume set on READY: ${volumeValue}`);
+          } catch (e) {
+            console.error('Failed to set initial widget volume:', e);
+          }
           
           // Get track info
           updateTrackInfo(widgetInstance);
@@ -453,62 +648,99 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
           setIsPlaying(true);
           setTrackLoaded(true);
           
-          // Start position tracking
-          const positionInterval = setInterval(() => {
-            widgetInstance.getPosition((position: number) => {
-              setTrackInfo(prev => ({ ...prev, position }));
-              
-              // If using tempo control, we need to frequently adjust the position
-              // to simulate tempo changes
-              if (isHEGModeActive && hegControlMode === 'tempo' && currentPlaybackRate !== 1.0) {
-                // Calculate how much to adjust position based on tempo
-                const adjustment = (currentPlaybackRate - 1.0) * 100; // milliseconds of adjustment
+          // Get current widget position
+          widgetInstance.getPosition((initialPosition: number) => {
+            console.log(`Initial position: ${initialPosition}ms`);
+            
+            // Start position tracking with more frequent updates
+            const positionInterval = setInterval(() => {
+              widgetInstance.getPosition((position: number) => {
+                setTrackInfo(prev => ({ ...prev, position }));
                 
-                if (adjustment !== 0) {
-                  // Only adjust if not at 1.0 speed
-                  setTimeout(() => {
-                    widgetInstance.seekTo(position + adjustment);
-                  }, 500); // Apply change every half second for smoother effect
+                // Sync with our hidden audio element for visualization and tempo control
+                if (audioElementRef.current && (isHEGModeActive || activeVisualizer !== 'none')) {
+                  // Convert position from ms to seconds for audio element
+                  const currentTimeSec = position / 1000;
+                  
+                  // If the positions are out of sync by more than 0.3 seconds, sync them
+                  if (Math.abs(audioElementRef.current.currentTime - currentTimeSec) > 0.3) {
+                    audioElementRef.current.currentTime = currentTimeSec;
+                    
+                    if (isDevMode) {
+                      console.log(`Synced audio element time: ${currentTimeSec}s`);
+                    }
+                  }
                 }
+              });
+            }, 250); // Update more frequently for better sync
+            
+            // Sync with our hidden audio element for visualization and tempo control
+            if (audioElementRef.current) {
+              // Set initial position
+              audioElementRef.current.currentTime = initialPosition / 1000;
+              
+              // Ensure we have the stream URL
+              if (audioElementRef.current.src && audioElementRef.current.src !== window.location.href) {
+                audioElementRef.current.play().catch(e => {
+                  console.warn('Auto-play prevented by browser for visualizer/tempo audio:', e);
+                  
+                  // Add a manual play trigger for when the user interacts
+                  const handleUserInteraction = () => {
+                    if (audioElementRef.current) {
+                      audioElementRef.current.play().catch(console.error);
+                    }
+                    window.removeEventListener('click', handleUserInteraction);
+                    window.removeEventListener('touchstart', handleUserInteraction);
+                  };
+                  
+                  window.addEventListener('click', handleUserInteraction, { once: true });
+                  window.addEventListener('touchstart', handleUserInteraction, { once: true });
+                });
+              } else if (streamUrl === 'widget://soundcloud' && currentTrackUrl) {
+                // Try to get a direct stream URL again if we don't have it
+                getStreamUrl(currentTrackUrl).then(newStreamUrl => {
+                  if (newStreamUrl && audioElementRef.current && newStreamUrl !== 'widget://soundcloud') {
+                    audioElementRef.current.src = newStreamUrl;
+                    audioElementRef.current.load();
+                    // Set initial position before playing
+                    audioElementRef.current.currentTime = initialPosition / 1000;
+                    audioElementRef.current.play().catch(e => {
+                      console.warn('Auto-play prevented after fetching stream URL:', e);
+                    });
+                    console.log('Successfully loaded audio stream for tempo control on play');
+                  }
+                });
               }
-            });
-          }, 1000);
+            }
+            
+            return () => clearInterval(positionInterval);
+          });
           
-          // Sync with our hidden audio element for visualization
-          if (audioElementRef.current) {
-            audioElementRef.current.currentTime = 0;
-            audioElementRef.current.play().catch(e => {
-              console.log('Auto-play prevented by browser for visualizer audio');
-            });
-          }
+          widgetInstance.bind(SC.Widget.Events.PAUSE, () => {
+            setIsPlaying(false);
+            
+            // Also pause our audio element
+            if (audioElementRef.current) {
+              audioElementRef.current.pause();
+            }
+          });
           
-          return () => clearInterval(positionInterval);
-        });
-        
-        widgetInstance.bind(SC.Widget.Events.PAUSE, () => {
-          setIsPlaying(false);
+          widgetInstance.bind(SC.Widget.Events.FINISH, () => {
+            setIsPlaying(false);
+            setTrackInfo(prev => ({ ...prev, position: 0 }));
+            
+            // Sync with our hidden audio element
+            if (audioElementRef.current) {
+              audioElementRef.current.pause();
+              audioElementRef.current.currentTime = 0;
+            }
+          });
           
-          // Sync with our hidden audio element
-          if (audioElementRef.current && !audioElementRef.current.paused) {
-            audioElementRef.current.pause();
-          }
-        });
-        
-        widgetInstance.bind(SC.Widget.Events.FINISH, () => {
-          setIsPlaying(false);
-          setTrackInfo(prev => ({ ...prev, position: 0 }));
-          
-          // Sync with our hidden audio element
-          if (audioElementRef.current) {
-            audioElementRef.current.pause();
-            audioElementRef.current.currentTime = 0;
-          }
-        });
-        
-        widgetInstance.bind(SC.Widget.Events.ERROR, () => {
-          setLoadError("Error loading track. Please check the URL and try again.");
-          setIsLoading(false);
-          setTrackLoaded(false);
+          widgetInstance.bind(SC.Widget.Events.ERROR, () => {
+            setLoadError("Error loading track. Please check the URL and try again.");
+            setIsLoading(false);
+            setTrackLoaded(false);
+          });
         });
       } catch (error) {
         console.error("Error initializing SoundCloud widget:", error);
@@ -577,16 +809,40 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   
   // Handle manual volume change
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseInt(e.target.value, 10);
+    const inputValue = parseInt(e.target.value, 10);
+    
+    // Ensure volume is at least MIN_VOLUME
+    const newVolume = Math.max(MIN_VOLUME, inputValue);
+    
     setVolume(newVolume);
     
+    // Apply volume to the widget
     if (widget) {
-      widget.setVolume(newVolume / 100);
+      try {
+        widget.setVolume(newVolume / 100);
+        console.log(`Widget volume set to ${newVolume}%`);
+      } catch (e) {
+        console.error('Error setting widget volume:', e);
+      }
     }
     
-    // Also update Web Audio API gain node
+    // Apply volume to the audio element itself (for direct playback)
+    if (audioElementRef.current) {
+      try {
+        audioElementRef.current.volume = 1.0; // Keep full for visualization
+      } catch (e) {
+        console.error('Error setting audio element volume:', e);
+      }
+    }
+    
+    // Apply volume to Web Audio API gain node
     if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = newVolume / 100;
+      try {
+        gainNodeRef.current.gain.value = newVolume / 100;
+        console.log(`Gain node volume set to ${newVolume}%`);
+      } catch (e) {
+        console.error('Error setting gain node volume:', e);
+      }
     }
   };
   
@@ -609,27 +865,25 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   
   // Toggle visualizers with force refresh
   const toggleVisualizers = () => {
-    const newState = !visualizersActive;
-    setVisualizersActive(newState);
-    
-    // Force refresh visualizers by changing the key
-    setVisualizerRefreshKey(prev => prev + 1);
+    if (activeVisualizer === 'none') {
+      setActiveVisualizer('frequency');
+    } else {
+      setActiveVisualizer('none');
+    }
   };
   
   // Change active visualizer with force refresh
-  const changeVisualizer = (type: 'none' | 'frequency' | 'heg' | 'shader' | 'both') => {
+  const changeVisualizer = (type: 'frequency' | 'heg' | 'shader' | 'all' | 'none') => {
     setActiveVisualizer(type);
-    
-    // Force refresh visualizers by changing the key
-    setVisualizerRefreshKey(prev => prev + 1);
+    // Initialize WebGL if needed for shader visualization
+    if ((type === 'shader' || type === 'all') && audioElementRef.current) {
+      // No additional initialization needed as ShaderVisualizer handles this
+    }
   };
   
   // Change shader geometry with force refresh
   const handleGeometryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setShaderGeometry(e.target.value as 'plane' | 'sphere' | 'halfsphere' | 'circle' | 'vrscreen');
-    
-    // Force refresh visualizers by changing the key
-    setVisualizerRefreshKey(prev => prev + 1);
   };
   
   // Format time in MM:SS
@@ -682,31 +936,31 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
   
   // Determine if the HEG effect is positive or negative
   const getHEGEffect = () => {
-    if (!isHEGModeActive || hegData.hegScore === 0) return null;
-    
-    const isPositive = hegData.hegScore > 0;
-    const intensity = Math.min(Math.abs(hegData.hegScore) * 20, 100);
+    if (!isHEGModeActive) return null;
     
     return (
-      <div className="flex items-center ml-2" title={`HEG Score: ${hegData.hegScore.toFixed(3)}`}>
-        <BiBrain className="text-blue-400 mr-1" />
-        {isPositive ? (
-          <IoMdArrowDropup 
-            className="text-green-500" 
-            style={{ 
-              fontSize: `${Math.max(16, 16 + intensity/10)}px`,
-              opacity: Math.max(0.5, intensity/100)
-            }} 
-          />
-        ) : (
-          <IoMdArrowDropdown 
-            className="text-red-500" 
-            style={{ 
-              fontSize: `${Math.max(16, 16 + intensity/10)}px`,
-              opacity: Math.max(0.5, intensity/100)
-            }} 
-          />
-        )}
+      <div className="heg-effect">
+        <div className="font-semibold text-sm">HEG Neural Control:</div>
+        <div className="flex items-center text-xs">
+          <span className="mr-2">Mode:</span>
+          <span className="bg-blue-500 px-2 py-0.5 rounded text-white">
+            {hegControlMode === 'volume' && 'Volume Control'}
+            {hegControlMode === 'filter' && 'Filter Control'}
+            {hegControlMode === 'tempo' && 'Tempo Control'}
+          </span>
+          
+          {hegControlMode === 'volume' && (
+            <span className="ml-2">Volume: {volume.toFixed(0)}%</span>
+          )}
+          
+          {hegControlMode === 'filter' && (
+            <span className="ml-2">Filter: {volume.toFixed(0)}%</span>
+          )}
+          
+          {hegControlMode === 'tempo' && (
+            <span className="ml-2">Tempo: {currentPlaybackRate.toFixed(2)}x</span>
+          )}
+        </div>
       </div>
     );
   };
@@ -820,15 +1074,22 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
     }
   }, [visualizersActive]);
   
+  // Add effect to keep audio element playback rate in sync with currentPlaybackRate state
+  useEffect(() => {
+    if (audioElementRef.current && 'playbackRate' in audioElementRef.current) {
+      audioElementRef.current.playbackRate = currentPlaybackRate;
+      
+      if (isDevMode) {
+        console.log(`Updated audio element playback rate to ${currentPlaybackRate}x`);
+      }
+    }
+  }, [currentPlaybackRate, isDevMode]);
+  
+  // Main return JSX
   return (
-    <>
-      <div
-        className={classNames("enhanced-player", {
-          "enhanced-player--welcome": !initialState,
-          "enhanced-player--playing": isPlaying,
-          "enhanced-player--loading": isLoading,
-        })}
-      >
+    <div className="enhanced-player">
+      {/* SoundCloud Player Section - Clean, separate section */}
+      <div className="soundcloud-player-section">
         <div className="player-visuals">
           {initialState ? (
             renderWelcomeState()
@@ -874,7 +1135,28 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
         </div>
         
         <div className="player-info">
-          {renderDetails()}
+          {/* Track title and info */}
+          <div className="track-info">
+            <div className="track-status">{getStatusText()}</div>
+            <div className="track-title">
+              {initialState ? 'Neural-Reactive Audio Player' : (trackInfo.title || 'No track loaded')}
+            </div>
+            <div className="track-artist">
+              {initialState ? 'Control music with your brain' : (trackInfo.artist || 'Load a SoundCloud track to begin')}
+            </div>
+            <div className="track-url">
+              {currentTrackUrl && !initialState && !isLoading && !loadError && (
+                <a 
+                  href={currentTrackUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="track-link"
+                >
+                  View on SoundCloud
+                </a>
+              )}
+            </div>
+          </div>
           
           <div className="player-controls">
             <button 
@@ -882,6 +1164,7 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
               onClick={togglePlay}
               disabled={initialState || !trackInfo.duration || isLoading}
               aria-label={isPlaying ? 'Pause' : 'Play'}
+              type="button"
             >
               {isPlaying ? '⏸' : '▶'}
             </button>
@@ -906,7 +1189,7 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
               <span className="volume-icon">🔊</span>
               <input
                 type="range"
-                min="0"
+                min={MIN_VOLUME.toString()}
                 max="100"
                 value={volume}
                 onChange={handleVolumeChange}
@@ -916,134 +1199,154 @@ const EnhancedSoundCloudPlayer: React.FC<EnhancedSoundCloudPlayerProps> = ({
               <span className="volume-value">{volume}%</span>
             </div>
           </div>
+          
+          {/* HEG mode controls */}
+          <div className="heg-controls">
+            <button
+              className={`heg-mode-button ${isHEGModeActive ? 'active' : ''}`}
+              onClick={() => setIsHEGModeActive(!isHEGModeActive)}
+              type="button"
+            >
+              HEG Mode: {isHEGModeActive ? 'ON' : 'OFF'}
+            </button>
+            
+            {isHEGModeActive && (
+              <div className="heg-mode-options">
+                <button
+                  className={`heg-option-button ${hegControlMode === 'volume' ? 'active' : ''}`}
+                  onClick={() => setHegControlMode('volume')}
+                  type="button"
+                >
+                  <FaVolumeUp className="heg-icon" /> Volume
+                </button>
+                <button
+                  className={`heg-option-button ${hegControlMode === 'filter' ? 'active' : ''}`}
+                  onClick={() => setHegControlMode('filter')}
+                  type="button"
+                >
+                  <FaFilter className="heg-icon" /> Filter
+                </button>
+                <button
+                  className={`heg-option-button ${hegControlMode === 'tempo' ? 'active' : ''}`}
+                  onClick={() => setHegControlMode('tempo')}
+                  type="button"
+                >
+                  <MdSlowMotionVideo className="heg-icon" /> Tempo
+                </button>
+              </div>
+            )}
+            
+            {isHEGModeActive && (
+              <div className="heg-display">
+                <div className="heg-parameter">
+                  <span className="heg-label">
+                    {hegControlMode === 'volume' && 'Volume:'}
+                    {hegControlMode === 'filter' && 'Filter:'}
+                    {hegControlMode === 'tempo' && 'Tempo:'}
+                  </span>
+                  <span className="heg-value">
+                    {hegControlMode === 'volume' && `${volume.toFixed(0)}%`}
+                    {hegControlMode === 'filter' && `${volume.toFixed(0)}%`}
+                    {hegControlMode === 'tempo' && `${currentPlaybackRate.toFixed(2)}x`}
+                  </span>
+                </div>
+                
+                {isDevMode && (
+                  <div className="heg-score">
+                    HEG Score: {hegData.hegScore.toFixed(4)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        
-        {/* Hidden audio element for Web Audio API-based visualization */}
-        <audio ref={audioElementRef} style={{ display: 'none' }} />
       </div>
       
-      {/* Moved visualizer controls and visualizers outside the main player container */}
-      <div className="visualizer-section" style={{ position: 'relative', zIndex: 10 }}>
-        {/* Visualizer controls */}
-        <div className="visualizer-controls">
-          <div className="visualizer-toggle">
-            <button 
-              className={visualizersActive ? 'active' : ''}
-              onClick={toggleVisualizers}
-            >
-              {visualizersActive ? 'Hide Visualizers' : 'Show Visualizers'}
-            </button>
-          </div>
-          
-          {visualizersActive && (
-            <div className="visualizer-selector">
-              <button 
-                className={activeVisualizer === 'frequency' ? 'active' : ''}
-                onClick={() => changeVisualizer('frequency')}
-              >
-                Frequency
-              </button>
-              <button 
-                className={activeVisualizer === 'heg' ? 'active' : ''}
-                onClick={() => changeVisualizer('heg')}
-              >
-                HEG
-              </button>
-              <button 
-                className={activeVisualizer === 'shader' ? 'active' : ''}
-                onClick={() => changeVisualizer('shader')}
-              >
-                Shader
-              </button>
-              <button 
-                className={activeVisualizer === 'both' ? 'active' : ''}
-                onClick={() => changeVisualizer('both')}
-              >
-                All
-              </button>
-              <button 
-                className={activeVisualizer === 'none' ? 'active' : ''}
-                onClick={() => changeVisualizer('none')}
-              >
-                None
-              </button>
-            </div>
-          )}
-          
-          {/* Shader geometry selector - only show when shader is active */}
-          {visualizersActive && (activeVisualizer === 'shader' || activeVisualizer === 'both') && (
-            <div className="shader-controls">
-              <select
-                value={shaderGeometry}
-                onChange={handleGeometryChange}
-                className="shader-geometry-select"
-              >
-                <option value="plane">Plane</option>
-                <option value="sphere">Sphere</option>
-                <option value="halfsphere">Half Sphere</option>
-                <option value="circle">Circle</option>
-                <option value="vrscreen">VR Screen</option>
-              </select>
-            </div>
-          )}
-        </div>
+      {/* Visualizers Section - Always visible */}
+      <div className="visualizers-section">
+        <h3 className="visualizers-title">Audio Visualizers</h3>
         
-        {/* Visualizers - Now using a grid layout with key for forced refresh */}
-        {visualizersActive && (
-          <div className="visualizers-grid" style={{ position: 'relative', zIndex: 20 }} key={visualizerRefreshKey}>
-            {/* Frequency Visualizer */}
-            {(activeVisualizer === 'frequency' || activeVisualizer === 'both') && (
-              <div className="visualizer frequency-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
-                <h4>
-                  <RiSoundModuleLine className="visualizer-icon" />
-                  Audio Frequency Spectrum
-                </h4>
-                <div className="visualizer-container" style={{ zIndex: 40 }}>
-                  <AudioFrequencyVisualizer 
-                    audioContext={audioContextRef.current}
-                    sourceNode={sourceNodeRef.current} 
-                    isActive={true} 
-                  />
-                </div>
-              </div>
-            )}
-            
-            {/* HEG Visualizer */}
-            {(activeVisualizer === 'heg' || activeVisualizer === 'both') && (
-              <div className="visualizer heg-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
-                <h4>
-                  <BiBrain className="visualizer-icon" />
-                  Neural Activity
-                </h4>
-                <div className="visualizer-container" style={{ zIndex: 40 }}>
-                  <AudioHEGVisualizer 
-                    hegData={hegData} 
-                    isActive={true} 
-                  />
-                </div>
-              </div>
-            )}
-            
-            {/* Shader Visualizer */}
-            {(activeVisualizer === 'shader' || activeVisualizer === 'both') && (
-              <div className="visualizer shader-visualizer" style={{ overflow: 'visible', zIndex: 30 }}>
-                <h4>
-                  <GiSoundWaves className="visualizer-icon" />
-                  3D Shader Visualization
-                </h4>
-                <div className="visualizer-container" style={{ zIndex: 40 }}>
-                  <ShaderVisualizer
-                    isActive={true}
-                    geometry={shaderGeometry}
-                    hegData={hegData}
-                  />
-                </div>
-              </div>
-            )}
+        <div className="visualizers-grid">
+          {/* Frequency Visualizer */}
+          <div className="visualizer frequency-visualizer">
+            <div className="visualizer-header">Frequency Spectrum</div>
+            <div className="visualizer-container">
+              <div 
+                className="progress-indicator"
+                style={{
+                  width: `${trackInfo.duration ? (trackInfo.position / trackInfo.duration) * 100 : 0}%`
+                }}
+              ></div>
+              <AudioFrequencyVisualizer 
+                key={`freq-${visualizerRefreshKey}`}
+                isActive={isPlaying}
+                audioContext={audioContextRef.current}
+                sourceNode={sourceNodeRef.current}
+              />
+            </div>
           </div>
-        )}
+          
+          {/* Waveform Visualizer */}
+          <div className="visualizer waveform-visualizer">
+            <div className="visualizer-header">Audio Waveform</div>
+            <div className="visualizer-container">
+              <div 
+                className="progress-indicator"
+                style={{
+                  width: `${trackInfo.duration ? (trackInfo.position / trackInfo.duration) * 100 : 0}%`
+                }}
+              ></div>
+              <AudioWaveformVisualizer 
+                key={`waveform-${visualizerRefreshKey}`}
+                isActive={isPlaying}
+                audioContext={audioContextRef.current}
+                sourceNode={sourceNodeRef.current}
+              />
+            </div>
+          </div>
+          
+          {/* HEG Visualizer */}
+          <div className="visualizer heg-visualizer">
+            <div className="visualizer-header">HEG Neural Activity</div>
+            <div className="visualizer-container">
+              <AudioHEGVisualizer 
+                key={`heg-${visualizerRefreshKey}`}
+                isActive={isPlaying}
+                hegData={hegData}
+                audioContext={audioContextRef.current}
+                sourceNode={sourceNodeRef.current}
+              />
+            </div>
+          </div>
+          
+          {/* Shader Visualizer */}
+          {activeVisualizer === 'shader' || activeVisualizer === 'all' ? (
+            <div className={`visualizer-container shader-visualizer`}>
+              <ShaderVisualizer 
+                isActive={activeVisualizer === 'shader' || activeVisualizer === 'all'} 
+                geometry={shaderGeometry}
+                hegData={hegData}
+                audioContext={audioContextRef.current}
+                sourceNode={sourceNodeRef.current}
+              />
+              <div className="shader-controls">
+                <select 
+                  className="shader-geometry-select"
+                  value={shaderGeometry}
+                  onChange={handleGeometryChange}
+                >
+                  <option value="plane">Plane</option>
+                  <option value="sphere">Sphere</option>
+                  <option value="halfsphere">Half Sphere</option>
+                  <option value="circle">Circle</option>
+                  <option value="vrscreen">VR Screen</option>
+                </select>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
-    </>
+    </div>
   );
 };
 

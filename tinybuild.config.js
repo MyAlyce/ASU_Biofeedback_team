@@ -59,6 +59,7 @@ const config = {
             '/redirect':{ //e.g. custom redirect
                 redirect:'https://google.com'
             },
+            '/shader-test': 'index.html', // Add the shader-test route
             '/other':(request,response) => {}, //custom request/response handling, return true to prevent any default response handling afterward
             '/': 'index.html', //alt start page declaration
             '/404':'packager/node_server/other/404.html', //e.g. custom error page

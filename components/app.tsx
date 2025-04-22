@@ -80,6 +80,7 @@ export class App extends Component<{},{}> {
             <button onClick={() => this.switchRoute('playSound')}>Play Sound</button>
             <button onClick={() => this.switchRoute('settings')}>Settings</button>
             <button onClick={() => this.switchRoute('testing')}>Testing</button>
+            <button onClick={() => this.switchRoute('shader-test')}>Shader Test</button>
             <button onClick={() => this.switchRoute('score')}>Score</button>
                       </div>
 

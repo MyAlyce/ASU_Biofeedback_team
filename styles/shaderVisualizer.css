@@ -1,0 +1,243 @@
+/* Standalone Shader Visualizer Styles */
+.standalone-shader-visualizer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #1e1e2f;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Shader Container */
+.standalone-shader-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #000;
+}
+
+.shader-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Controls Section */
+.shader-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+}
+
+.shader-controls button,
+.shader-controls select {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shader-controls button:hover,
+.shader-controls select:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.shader-controls select {
+  padding-right: 24px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+}
+
+/* Geometry selector */
+.geometry-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.geometry-selector label {
+  font-weight: 600;
+  color: #fff;
+  min-width: 80px;
+}
+
+.geometry-select {
+  flex-grow: 1;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: #3c3c5c;
+  color: #fff;
+  border: 1px solid #5c5c7c;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.geometry-select:hover {
+  background-color: #4c4c6c;
+}
+
+.geometry-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.5);
+}
+
+/* HEG Indicators */
+.heg-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.heg-indicator-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heg-label {
+  font-weight: 600;
+  color: #fff;
+  min-width: 100px;
+}
+
+.heg-bar-container {
+  flex-grow: 1;
+  height: 12px;
+  background-color: #2a2a3a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.heg-bar {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, #3498db, #2980b9);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.heg-bar.effort {
+  background: linear-gradient(90deg, #2ecc71, #27ae60);
+}
+
+.heg-value {
+  font-family: monospace;
+  color: #fff;
+  min-width: 70px;
+  text-align: right;
+}
+
+/* Audio Visualization */
+.audio-visualizer-container {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.5rem;
+  background-color: rgba(20, 20, 30, 0.5);
+  border-radius: 8px;
+}
+
+.audio-indicators {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  height: 100px;
+  margin-top: 0.5rem;
+}
+
+.audio-visualizer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30%;
+}
+
+.audio-bar-container {
+  width: 30px;
+  height: 80px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.audio-bar {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(to top, #ff0055, #ff8800);
+  transition: height 0.1s ease-in-out;
+}
+
+.audio-bar.mid {
+  background: linear-gradient(to top, #00ff88, #88ff00);
+}
+
+.audio-bar.treble {
+  background: linear-gradient(to top, #0088ff, #8800ff);
+}
+
+.audio-label {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .audio-bar-container {
+    width: 20px;
+    height: 60px;
+  }
+  
+  .audio-indicators {
+    height: 80px;
+  }
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .heg-indicator-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .heg-label {
+    min-width: auto;
+    margin-bottom: 5px;
+  }
+
+  .heg-value {
+    min-width: auto;
+    text-align: left;
+  }
+} 

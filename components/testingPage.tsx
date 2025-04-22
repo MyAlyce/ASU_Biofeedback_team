@@ -4,6 +4,7 @@ import AudioHEGVisualizer from './visualizations/AudioHEGVisualizer';
 import EnhancedSoundCloudPlayer from './players/EnhancedSoundCloudPlayer';
 import { Chart } from './chart/Chart';
 import { HEGscore } from './hegscore';
+import { ShaderPlayer } from './threejs/threeshader';
 import '../styles/testingPage.css';
 
 // Define our own UI components directly
@@ -248,138 +249,129 @@ const TestingPage: React.FC<TestingPageProps> = ({ onReturn }) => {
                 <Button
                   onClick={toggleHEGMode}
                   variant={isHEGModeActive ? "default" : "outline"}
-                  className="control-button"
-                  icon={isHEGModeActive ? <span>◉</span> : <span>◯</span>}
                 >
-                  {isHEGModeActive ? "Active" : "Inactive"}
+                  {isHEGModeActive ? 'Active' : 'Inactive'}
                 </Button>
               </div>
               
               <div className="control-group">
-                <label className="control-label">Control Parameter</label>
-                <Select
-                  value={hegControlMode}
-                  onValueChange={(value) => setHegControlMode(value as 'volume' | 'filter' | 'tempo')}
-                  className="control-select"
-                >
-                  <option value="volume">Volume Control</option>
-                  <option value="filter">Filter Control</option>
-                  <option value="tempo">Tempo Control</option>
-                </Select>
-              </div>
-              
-              <div className="control-group">
-                <label className="control-label">Developer Mode</label>
+                <label className="control-label">Visualizer</label>
                 <Button
-                  onClick={() => setIsDevMode(!isDevMode)}
-                  variant={isDevMode ? "default" : "outline"}
-                  className="control-button"
-                  icon={isDevMode ? <span>◉</span> : <span>◯</span>}
-                >
-                  {isDevMode ? "Enabled" : "Disabled"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Main Player Column */}
-        <div className="main-content">
-          {/* Player Card */}
-          <div className="card player-section">
-            <div className="card-header">
-              <h3>Neural-Reactive Player</h3>
-            </div>
-            <div className="card-content">
-              <EnhancedSoundCloudPlayer
-                trackUrl={selectedTrackUrl}
-                hegData={hegData}
-                isHEGModeActive={isHEGModeActive}
-                hegControlMode={hegControlMode}
-                isDevMode={isDevMode}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Add a clearer visual separator for Neural Visualizations */}
-      <div className="section-divider">
-        <div className="divider-line"></div>
-      </div>
-      
-      {/* Section Spacer */}
-      <div className="section-spacer"></div>
-      
-      {/* Visualizations Section - Full Width */}
-      <div className="visualizations-section">
-        {/* Visualization Selector Tabs */}
-        <div className="visualization-tabs">
-          <button 
-            className={activeTab === 'audio' ? 'active' : ''}
-            onClick={() => toggleTab('audio')}
-          >
-            <span className="tab-icon">🎵</span>
-            Audio Visualization
-          </button>
-          <button 
-            className={activeTab === 'data' ? 'active' : ''}
-            onClick={() => toggleTab('data')}
-          >
-            <span className="tab-icon">📊</span>
-            Data Analysis
-          </button>
-        </div>
-        
-        {/* Visualizations Container */}
-        <div className="visualizations-container">
-          {/* Audio Visualization */}
-          <div className={`card visualization-area ${activeTab === 'audio' ? '' : 'hidden'}`}>
-            <div className="visualization-header">
-              <h3>Neural-Audio Synchronization</h3>
-              <div className="visualization-controls">
-                <Button 
                   onClick={toggleVisualizer}
                   variant={visualizerActive ? "default" : "outline"}
-                  className="viz-control-button"
-                  icon={visualizerActive ? <span>▶</span> : <span>■</span>}
                 >
-                  {visualizerActive ? 'Active' : 'Paused'}
+                  {visualizerActive ? 'On' : 'Off'}
                 </Button>
               </div>
-            </div>
-            <div className="visualization-container">
-              <AudioHEGVisualizer hegData={hegData} isActive={visualizerActive} />
+              
+              <div className="control-group">
+                <label className="control-label">Control Mode</label>
+                <Select 
+                  value={hegControlMode}
+                  onValueChange={(value) => setHegControlMode(value as 'volume' | 'filter' | 'tempo')}
+                  label=""
+                >
+                  <SelectItem value="volume">Volume Control</SelectItem>
+                  <SelectItem value="filter">Filter Control</SelectItem>
+                  <SelectItem value="tempo">Tempo Control</SelectItem>
+                </Select>
+              </div>
             </div>
           </div>
-
-          {/* Data Visualization */}
-          <div className={`card data-visualization-area ${activeTab === 'data' ? '' : 'hidden'}`}>
-            <div className="data-visualization-header">
-              <h3>Brain Activity Monitoring</h3>
-              <div className="data-time-controls">
-                <Button variant="outline" className="time-control">Last 5 Min</Button>
-                <Button variant="outline" className="time-control">Last 1 Min</Button>
-                <Button variant="default" className="time-control">Real-time</Button>
+          
+          {/* Dev Mode Button (hidden unless needed) */}
+          <div className="dev-controls">
+            <Button
+              onClick={() => setIsDevMode(!isDevMode)}
+              variant="outline"
+              className="dev-button"
+            >
+              {isDevMode ? 'Hide Dev Tools' : 'Show Dev Tools'}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Main Content - Right Column */}
+        <div className="main-content">
+          {/* Tabs for Audio and Data Views */}
+          <div className="content-tabs">
+            <button 
+              className={`tab-button ${activeTab === 'audio' ? 'active' : ''}`}
+              onClick={() => toggleTab('audio')}
+            >
+              Audio Player
+            </button>
+            <button 
+              className={`tab-button ${activeTab === 'data' ? 'active' : ''}`}
+              onClick={() => toggleTab('data')}
+            >
+              Neural Data
+            </button>
+          </div>
+          
+          {/* Tab Content */}
+          <div className="tab-content">
+            {/* Audio Player Tab */}
+            {activeTab === 'audio' && (
+              <div className="audio-tab">
+                <EnhancedSoundCloudPlayer 
+                  trackUrl={selectedTrackUrl}
+                  isHEGModeActive={isHEGModeActive}
+                  hegData={hegData}
+                  hegControlMode={hegControlMode}
+                  isDevMode={isDevMode}
+                />
               </div>
-            </div>
-            <div className="chart-wrapper">
-              <div className="chart-container">
-                <div className="chart-label">HEG Score Trend</div>
-                <HEGscore />
+            )}
+            
+            {/* Data Tab */}
+            {activeTab === 'data' && (
+              <div className="data-tab">
+                <div className="data-charts">
+                  <div className="chart-container">
+                    <h4 className="chart-title">HEG Signal</h4>
+                    <Chart presets={['heg_playback']} />
+                  </div>
+                  <div className="chart-container">
+                    <h4 className="chart-title">Heart Rate</h4>
+                    <Chart presets={['hr']} />
+                  </div>
+                  <div className="chart-container">
+                    <h4 className="chart-title">PPG Signal</h4>
+                    <Chart presets={['ppg']} />
+                  </div>
+                </div>
               </div>
-              <div className="chart-container">
-                <div className="chart-label">Brainwave Activity</div>
-                <Chart presets={['heg_playback']} height="200px" width="100%" />
-              </div>
-              <div className="chart-container">
-                <div className="chart-label">Heart Rate Variability</div>
-                <Chart presets={['hr']} height="200px" width="100%" />
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
+      
+      {/* Bottom Section - 3D Shader Visualization */}
+      <div className="shader-section">
+        <h3 className="section-title">3D Shader Visualization</h3>
+        <div className="shader-container">
+          <ShaderPlayer />
+        </div>
+      </div>
+      
+      {/* Dev Tools (only shown in dev mode) */}
+      {isDevMode && (
+        <div className="dev-panel">
+          <div className="card">
+            <div className="card-header">
+              <h3>Developer Tools</h3>
+            </div>
+            <div className="card-content">
+              <p>HEG Raw: {hegData.heg.toFixed(4)}</p>
+              <p>HEG Effort: {hegData.hegEffort.toFixed(4)}</p>
+              <p>Selected URL: {selectedTrackUrl}</p>
+              <p>HEG Mode: {isHEGModeActive ? 'Active' : 'Inactive'}</p>
+              <p>Control Mode: {hegControlMode}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
