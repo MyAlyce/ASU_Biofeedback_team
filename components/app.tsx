@@ -8,8 +8,9 @@ import { ShaderPlayer } from './threejs/threeshader'
 import { HEGscore } from './hegscore'
 import GamePage  from '../scripts/games/gamePage'
 import HomePage from './homePage'
-import SoundPage from './SoundPage'
+import SoundPage from './soundPage'
 import SettingsPage from './settingsPage'
+import TestingPage from './testingPage'
 import '../styles/global.css';
 
 
@@ -23,10 +24,17 @@ export class App extends Component<{},{}> {
         this.setState({ currentView: view});
     };
 
+    // Handle back to main app from immersive view
+    handleReturnFromImmersive = () => {
+        this.setState({ currentView: 'home' });
+    };
 
     render() {
          
         const{currentView} = this.state;
+        
+        // Check if we're in the testing view for immersive mode
+        const isImmersiveView = currentView === 'testing';
 
             {/* <Espruino showLogger={false}/> */}
             {/* <SpotifyControl/> */}
@@ -43,6 +51,8 @@ export class App extends Component<{},{}> {
                     return <SoundPage />;
                   case 'settings':
                     return <SettingsPage />;
+                  case 'testing':
+                    return <TestingPage onReturn={this.handleReturnFromImmersive} />;
                   case 'score':
                     //return <ScorePage />;
                     break;
@@ -52,6 +62,16 @@ export class App extends Component<{},{}> {
               };
 
               
+            // If we're in immersive mode, only render the TestingPage without navigation
+            if (isImmersiveView) {
+                return (
+                    <div className="immersive-container">
+                        <TestingPage onReturn={this.handleReturnFromImmersive} />
+                    </div>
+                );
+            }
+              
+            // Regular app rendering with menu bar
             return (
                 <div>
             <div className="menu-bar">
@@ -59,6 +79,7 @@ export class App extends Component<{},{}> {
             <button onClick={() => this.switchRoute('games')}>Games</button>
             <button onClick={() => this.switchRoute('playSound')}>Play Sound</button>
             <button onClick={() => this.switchRoute('settings')}>Settings</button>
+            <button onClick={() => this.switchRoute('testing')}>Testing</button>
             <button onClick={() => this.switchRoute('score')}>Score</button>
                       </div>
 

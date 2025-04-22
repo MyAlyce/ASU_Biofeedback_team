@@ -10,10 +10,10 @@
     "build": "tinybuild build",
     "serve": "tinybuild serve",
     "init": "node tinybuild/init.js",
-    "concurrent": "concurrently \"npm run python\" \"npm start\"",
-    "dev": "npm run pip && npm i --save-dev concurrently && npm i --save-dev nodemon && npm run concurrent",
+    "concurrent": "npm start",
+    "dev": "npm i --save-dev concurrently && npm i --save-dev nodemon && npm start",
     "startdev": "nodemon --exec \"node tinybuild.js\" -e ejs,js,ts,jsx,tsx,css,html,jpg,png,scss,txt,csv",
-    "python": "python python/server.py",
+    "python": "echo \"No Python server available\" && exit 0",
     "pip": "pip install quart && pip install websockets",
     "pwa": "npm i workbox-cli && workbox generateSW node_server/pwa/workbox-config.js && npm run build && npm start",
     "electron": "electron ./electron",
@@ -32,6 +32,7 @@
     "react-bootstrap": "^2.10.4",
     "react-dom": "^18.3.1",
     "react-feather": "^2.0.10",
+    "react-icons": "^5.5.0",
     "react-scomponent": "^2.1.2",
     "threeshaderhelper": "^0.3.0",
     "webgl-plot-utils": "^0.4.3",
@@ -45,5 +46,9 @@
       "dist/",
       ".temp/"
     ]
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.9"
   }
 }

@@ -45,7 +45,7 @@ const config = {
         //redirect: 'http://localhost:8082', //instead of serving the default content, redirect to another url
         //headers: { 'Content-Security-Policy': '*'  }, //global header overrides
         startpage: 'index.html',  //default home page/app entry point 
-        hotreload: 5000,  //hotreload websocket server port
+        hotreload: 5001,  //hotreload websocket server port
         socket_protocol: "ws", //frontend socket protocol, wss for served, ws for localhost
         
         routes:{ //set additional page routes (for sites instead of single page applications)
