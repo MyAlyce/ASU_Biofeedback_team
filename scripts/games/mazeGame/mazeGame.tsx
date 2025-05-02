@@ -1,4 +1,6 @@
+// MazeGame.tsx
 import React, { useState, useEffect } from 'react';
+import './mazeGame.css';
 
 type Position = {
   row: number;
@@ -15,7 +17,7 @@ const maze = [
 
 const startPosition: Position = { row: 1, col: 1 };
 
-const App: React.FC = () => {
+export const MazeGame: React.FC = () => {
   const [playerPos, setPlayerPos] = useState<Position>(startPosition);
 
   const movePlayer = (direction: string) => {
@@ -28,11 +30,7 @@ const App: React.FC = () => {
     else if (direction === 'ArrowLeft') newCol--;
     else if (direction === 'ArrowRight') newCol++;
 
-    if (
-      maze[newRow] &&
-      maze[newRow][newCol] &&
-      maze[newRow][newCol] === '.'
-    ) {
+    if (maze[newRow]?.[newCol] === '.') {
       setPlayerPos({ row: newRow, col: newCol });
     }
   };
@@ -44,20 +42,25 @@ const App: React.FC = () => {
   }, [playerPos]);
 
   return (
-    <div>
-      <h2>Maze Game</h2>
-      <div style={{ fontFamily: 'monospace', lineHeight: '1.5em' }}>
-        {maze.map((row, rowIndex) => (
-          <div key={rowIndex}>
-            {row.map((cell, colIndex) => {
-              const isPlayer = rowIndex === playerPos.row && colIndex === playerPos.col;
-              return <span key={colIndex}>{isPlayer ? 'P' : cell}</span>;
-            })}
-          </div>
-        ))}
-      </div>
+    <div className="maze-container">
+      {maze.map((row, rowIndex) => (
+        <div key={rowIndex} className="maze-row">
+          {row.map((cell, colIndex) => {
+            const isPlayer = rowIndex === playerPos.row && colIndex === playerPos.col;
+            const cellClass = isPlayer
+              ? "player"
+              : cell === "#"
+              ? "wall"
+              : "path";
+
+            return (
+              <div key={colIndex} className={`maze-cell ${cellClass}`}>
+                {isPlayer ? 'P' : ''}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 };
-
-export default App;
